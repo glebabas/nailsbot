@@ -424,15 +424,31 @@ export const computeAvailableSlotsLocal = (
   return { slots, isDayOff: false };
 };
 
+// Настройка базового URL для связи фронтенда с FastAPI backend
+const RAW_API_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) || '';
+export const API_BASE_URL = RAW_API_BASE_URL.replace(/\/$/, '');
+
+export const buildApiUrl = (endpoint: string): string => {
+  if (API_BASE_URL) {
+    return `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+  }
+  return endpoint;
+};
+
 export const api = {
   getServices: async (): Promise<CategorizedServices> => {
+    const url = buildApiUrl('/api/services');
     try {
-      const res = await fetch('/api/services');
+      console.log('📡 [API Request] GET', url);
+      const res = await fetch(url);
       if (res.ok) {
-        return await res.json();
+        const data = await res.json();
+        console.log('✅ [API Response] Services loaded from backend:', Object.keys(data).length, 'categories');
+        return data;
       }
-    } catch {
-      // Если FastAPI сервер не запущен в текущем контейнере, используем локальные данные
+      console.warn('⚠️ [API Warning] Backend returned non-ok status for services:', res.status);
+    } catch (err) {
+      console.warn('⚠️ [API Error] Failed to connect to FastAPI backend for services, using local fallback:', err);
     }
     return INITIAL_SERVICES;
   },
@@ -443,8 +459,10 @@ export const api = {
     serviceIds: number[]
   ): Promise<{ timing: CalculatedTiming; slots: AvailableSlot[]; isDayOff: boolean }> => {
     const timing = calculateTiming(serviceIds);
+    const url = buildApiUrl('/api/slots');
     try {
-      const res = await fetch('/api/slots', {
+      console.log('📡 [API Request] POST', url, { masterId, dateStr, serviceIds });
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -455,14 +473,16 @@ export const api = {
       });
       if (res.ok) {
         const data = await res.json();
+        console.log('✅ [API Response] Slots received from backend:', data.available_slots?.length || 0);
         return {
           timing,
           slots: data.available_slots || [],
           isDayOff: data.is_day_off || false,
         };
       }
-    } catch {
-      // Локальный фоллбек
+      console.warn('⚠️ [API Warning] Backend returned non-ok status for slots:', res.status);
+    } catch (err) {
+      console.warn('⚠️ [API Error] Failed to fetch slots from backend, using local engine:', err);
     }
 
     const { slots, isDayOff } = computeAvailableSlotsLocal(
@@ -502,19 +522,23 @@ export const api = {
       comment: booking.comment,
     };
 
+    const url = buildApiUrl('/api/appointments');
     try {
-      const res = await fetch('/api/appointments', {
+      console.log('📡 [API Request] POST', url, payload);
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       if (res.ok) {
         const created = await res.json();
+        console.log('✅ [API Response] Appointment created in DB:', created);
         saveAppointment(created);
         return created;
       }
-    } catch {
-      // Сохраняем локально при отсутствии прямого соединения с FastAPI
+      console.warn('⚠️ [API Warning] Backend appointments status:', res.status);
+    } catch (err) {
+      console.warn('⚠️ [API Error] Failed to save appointment to FastAPI backend:', err);
     }
 
     const newAppointment: Appointment = {
@@ -544,13 +568,18 @@ export const api = {
   },
 
   getMasterMonthSchedule: async (masterId: number, month: string): Promise<MasterMonthOverview> => {
+    const url = buildApiUrl(`/api/schedule/month?master_id=${masterId}&month=${month}`);
     try {
-      const res = await fetch(`/api/schedule/month?master_id=${masterId}&month=${month}`);
+      console.log('📡 [API Request] GET', url);
+      const res = await fetch(url);
       if (res.ok) {
-        return await res.json();
+        const data = await res.json();
+        console.log('✅ [API Response] Month schedule loaded from DB');
+        return data;
       }
-    } catch {
-      // Использование локального хранилища
+      console.warn('⚠️ [API Warning] Backend schedule status:', res.status);
+    } catch (err) {
+      console.warn('⚠️ [API Error] Failed to fetch month schedule from backend:', err);
     }
 
     // Локальный генератор данных месяца на основе localStorage
@@ -618,8 +647,10 @@ export const api = {
     settings: ScheduleTemplateSettings,
     masterId: number = 1
   ): Promise<{ success: boolean; message: string }> => {
+    const url = buildApiUrl('/api/schedule/template');
     try {
-      const res = await fetch('/api/schedule/template', {
+      console.log('📡 [API Request] POST', url, settings);
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -636,10 +667,12 @@ export const api = {
       });
       if (res.ok) {
         const data = await res.json();
+        console.log('✅ [API Response] Template applied in DB:', data.message);
         return { success: true, message: data.message };
       }
-    } catch {
-      // Фоллбек на локальное хранилище
+      console.warn('⚠️ [API Warning] Template status:', res.status);
+    } catch (err) {
+      console.warn('⚠️ [API Error] Failed to apply template on backend:', err);
     }
 
     // Локальное применение шаблона в localStorage
@@ -689,17 +722,21 @@ export const api = {
     masterId: number,
     day: MasterScheduleDay
   ): Promise<{ success: boolean; message: string }> => {
+    const url = buildApiUrl(`/api/schedule/day?master_id=${masterId}`);
     try {
-      const res = await fetch(`/api/schedule/day?master_id=${masterId}`, {
+      console.log('📡 [API Request] POST', url, day);
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(day),
       });
       if (res.ok) {
+        console.log('✅ [API Response] Day schedule updated in DB');
         return { success: true, message: 'День успешно обновлен' };
       }
-    } catch {
-      // Фоллбек
+      console.warn('⚠️ [API Warning] Day schedule status:', res.status);
+    } catch (err) {
+      console.warn('⚠️ [API Error] Failed to update day schedule on backend:', err);
     }
 
     const stored = getStoredSchedule();
