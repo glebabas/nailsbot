@@ -744,4 +744,47 @@ export const api = {
     saveStoredSchedule(stored);
     return { success: true, message: `День ${day.date} успешно сохранен` };
   },
+
+  getMasterDaySchedule: async (masterId: number, dateStr: string): Promise<Appointment[]> => {
+    const url = buildApiUrl(`/api/schedule?master_id=${masterId}&schedule_date=${dateStr}`);
+    try {
+      console.log('📡 [API Request] GET', url);
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        console.log('✅ [API Response] Day schedule loaded from DB', data);
+        return data.appointments || [];
+      }
+      console.warn('⚠️ [API Warning] Backend schedule status:', res.status);
+    } catch (err) {
+      console.warn('⚠️ [API Error] Failed to fetch day schedule from backend:', err);
+    }
+
+    // Fallback
+    return getStoredAppointments().filter((a) => a.date === dateStr);
+  },
+
+  updateAppointmentStatus: async (appointmentId: number, status: Appointment['status']): Promise<{ success: boolean; newStatus?: Appointment['status'] }> => {
+    const url = buildApiUrl(`/api/appointments/${appointmentId}/status?status_value=${status}`);
+    try {
+      console.log('📡 [API Request] PATCH', url);
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        console.log('✅ [API Response] Status updated in DB:', data);
+        return { success: true, newStatus: data.new_status };
+      }
+      console.warn('⚠️ [API Warning] Failed to update status on backend, status:', res.status);
+    } catch (err) {
+      console.warn('⚠️ [API Error] Failed to update status on backend:', err);
+    }
+    
+    // Fallback to local storage update
+    const updated = getStoredAppointments().map(a => a.id === appointmentId ? { ...a, status } : a);
+    localStorage.setItem(STORAGE_APPOINTMENTS_KEY, JSON.stringify(updated));
+    return { success: true, newStatus: status };
+  },
 };

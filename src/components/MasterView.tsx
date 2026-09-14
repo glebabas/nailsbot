@@ -18,7 +18,7 @@ import {
   ListTodo,
 } from 'lucide-react';
 import { Appointment } from '../types';
-import { getStoredAppointments } from '../services/api';
+import { api, getStoredAppointments } from '../services/api';
 import { triggerHaptic, getTelegramUser } from '../utils/telegram';
 import { ScheduleSetup } from './ScheduleSetup';
 
@@ -31,13 +31,14 @@ export const MasterView: React.FC = () => {
   );
   const [modalPhoto, setModalPhoto] = useState<string | null>(null);
 
-  const refreshAppointments = () => {
-    setAppointments(getStoredAppointments());
+  const refreshAppointments = async () => {
+    const fetched = await api.getMasterDaySchedule(1, selectedDate);
+    setAppointments(fetched);
   };
 
   useEffect(() => {
     refreshAppointments();
-  }, []);
+  }, [selectedDate]);
 
   const filteredAppointments = appointments.filter((a) => a.date === selectedDate);
   const totalRevenue = filteredAppointments
@@ -56,13 +57,14 @@ export const MasterView: React.FC = () => {
     return `${m} мин`;
   };
 
-  const handleStatusChange = (appId: number, newStatus: Appointment['status']) => {
+  const handleStatusChange = async (appId: number, newStatus: Appointment['status']) => {
     triggerHaptic('medium');
     const updated = appointments.map((a) =>
       a.id === appId ? { ...a, status: newStatus } : a
     );
     setAppointments(updated);
-    localStorage.setItem('nail_app_appointments_v1', JSON.stringify(updated));
+    
+    await api.updateAppointmentStatus(appId, newStatus);
   };
 
   return (
