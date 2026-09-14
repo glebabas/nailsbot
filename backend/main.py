@@ -35,19 +35,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Подключаем роуты: как с префиксом /api, так и без него (на случай, если Nginx делает rewrite или proxy_pass со слэшем)
-app.include_router(api_router)
-
-# Создаем копию роутера без префикса /api для совместимости с любыми конфигурациями reverse-proxy
-from fastapi import APIRouter
-root_compat_router = APIRouter(tags=["Compatibility"])
-for route in api_router.routes:
-    # Если путь начинается с /api, добавляем альтернативный маршрут без /api
-    if route.path.startswith("/api/"):
-        alt_path = route.path[len("/api"):]
-        root_compat_router.routes.append(route)
-
-app.include_router(root_compat_router, prefix="")
+# Префикс /api задаём один раз при подключении роутера (не в самом APIRouter — иначе пути удваиваются)
+app.include_router(api_router, prefix="/api")
 
 
 @app.get("/health", tags=["Health"])

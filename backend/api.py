@@ -29,7 +29,7 @@ from backend.scheduling_engine import (
     SmartSchedulingEngine, ServiceItem, minutes_to_str, time_to_minutes
 )
 
-router = APIRouter(prefix="/api", tags=["Nail Studio Mini App API"])
+router = APIRouter(tags=["Nail Studio Mini App API"])
 
 
 # =====================================================================
