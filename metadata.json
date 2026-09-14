@@ -1,0 +1,6 @@
+{
+  "name": "Nail Master Telegram Mini App & Scheduling Bot",
+  "description": "Telegram Mini App and dynamic scheduling bot for nail technicians with multi-stage service constructor, smart slot calculation, schedule setup, and photo references.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

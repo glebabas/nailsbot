@@ -1,0 +1,710 @@
+/**
+ * Клиентский сервис данных и Smart Scheduling Engine для Telegram Mini App.
+ * Обеспечивает полную функциональность как при подключении к FastAPI backend,
+ * так и в автономном режиме браузера с сохранением состояния в localStorage.
+ */
+
+import {
+  CategorizedServices,
+  Service,
+  AvailableSlot,
+  CalculatedTiming,
+  Appointment,
+  BookingState,
+  MasterScheduleDay,
+  ScheduleTemplateSettings,
+  MasterMonthOverview,
+  MonthDaySchedule
+} from '../types';
+
+// Начальный каталог услуг на русском языке (полностью соответствует backend/database.py)
+export const INITIAL_SERVICES: CategorizedServices = {
+  removal: [
+    {
+      id: 1,
+      category: 'removal',
+      name: 'Без снятия',
+      description: 'Ногти чистые, снятие предыдущего материала не требуется',
+      duration_minutes: 0,
+      price: 0,
+      sort_order: 1,
+      is_active: true,
+    },
+    {
+      id: 2,
+      category: 'removal',
+      name: 'Снятие гель-лака другого мастера',
+      description: 'Бережное аппаратное снятие покрытия фрезой без травмирования ногтевой пластины',
+      duration_minutes: 20,
+      price: 300,
+      sort_order: 2,
+      is_active: true,
+    },
+    {
+      id: 3,
+      category: 'removal',
+      name: 'Снятие нарощенных ногтей / акрила',
+      description: 'Полное бережное спиливание твердого искусственного материала',
+      duration_minutes: 35,
+      price: 600,
+      sort_order: 3,
+      is_active: true,
+    },
+    {
+      id: 4,
+      category: 'removal',
+      name: 'Снятие моей работы с покрытием',
+      description: 'Бесплатное снятие предыдущей работы нашего мастера',
+      duration_minutes: 15,
+      price: 0,
+      sort_order: 4,
+      is_active: true,
+    },
+  ],
+  base: [
+    {
+      id: 10,
+      category: 'base',
+      name: 'Комбинированный маникюр + гель-лак',
+      description: 'Аппаратная + ножничная обработка кутикулы, идеальное выравнивание базой, цвет под кутикулу',
+      duration_minutes: 90,
+      price: 2200,
+      sort_order: 10,
+      is_active: true,
+    },
+    {
+      id: 11,
+      category: 'base',
+      name: 'Маникюр с укреплением твердым гелем',
+      description: 'Укрепление тонких, слоящихся или клюющих ногтей полигелем/твердым гелем',
+      duration_minutes: 110,
+      price: 2700,
+      sort_order: 11,
+      is_active: true,
+    },
+    {
+      id: 12,
+      category: 'base',
+      name: 'Наращивание ногтей (длина 1–3)',
+      description: 'Моделирование архитектуры на нижние/верхние формы, выравнивание, цветное покрытие',
+      duration_minutes: 150,
+      price: 3800,
+      sort_order: 12,
+      is_active: true,
+    },
+    {
+      id: 13,
+      category: 'base',
+      name: 'Гигиенический экспресс-маникюр',
+      description: 'Обработка кутикулы и боковых валиков, опил формы, масло или лечебное глянцевание (без цвета)',
+      duration_minutes: 45,
+      price: 1200,
+      sort_order: 13,
+      is_active: true,
+    },
+  ],
+  design: [
+    {
+      id: 20,
+      category: 'design',
+      name: 'Без дизайна (чистый однотон)',
+      description: 'Классическое ровное покрытие одним или двумя оттенками',
+      duration_minutes: 0,
+      price: 0,
+      sort_order: 20,
+      is_active: true,
+    },
+    {
+      id: 21,
+      category: 'design',
+      name: 'Французский маникюр (Френч / Лунный)',
+      description: 'Идеальная контрастная или белая линия улыбки на всех 10 ногтях',
+      duration_minutes: 30,
+      price: 500,
+      sort_order: 21,
+      is_active: true,
+    },
+    {
+      id: 22,
+      category: 'design',
+      name: 'Втирка / Градиент (Омбре)',
+      description: 'Жемчужный/зеркальный перелив или плавный переход двух оттенков',
+      duration_minutes: 25,
+      price: 450,
+      sort_order: 22,
+      is_active: true,
+    },
+    {
+      id: 23,
+      category: 'design',
+      name: 'Сложный дизайн 4+ ногтей / Арт-роспись',
+      description: 'Геометрия, авторские рисунки от руки, стемпинг, инкрустация кристаллами',
+      duration_minutes: 45,
+      price: 800,
+      sort_order: 23,
+      is_active: true,
+    },
+  ],
+  repair: [
+    {
+      id: 30,
+      category: 'repair',
+      name: 'Ремонт трещины / донаращивание (1 ноготь)',
+      description: 'Ремонт трещины шелком, акригелем или поднятие клюющего угла',
+      duration_minutes: 15,
+      price: 150,
+      sort_order: 30,
+      is_active: true,
+    },
+    {
+      id: 31,
+      category: 'repair',
+      name: 'Ремонт 2–3 ногтей',
+      description: 'Восстановление углов и ремонт сломанных ногтей перед покрытием',
+      duration_minutes: 25,
+      price: 350,
+      sort_order: 31,
+      is_active: true,
+    },
+  ],
+};
+
+const STERILIZATION_BUFFER_MINUTES = 15;
+
+export const getAllFlatServices = (): Service[] => {
+  return [
+    ...INITIAL_SERVICES.removal,
+    ...INITIAL_SERVICES.base,
+    ...INITIAL_SERVICES.design,
+    ...INITIAL_SERVICES.repair,
+  ];
+};
+
+export const calculateTiming = (selectedServiceIds: number[]): CalculatedTiming => {
+  const allServices = getAllFlatServices();
+  const selected = allServices.filter((s) => selectedServiceIds.includes(s.id));
+
+  const servicesDuration = selected.reduce((sum, s) => sum + s.duration_minutes, 0);
+  const totalPrice = selected.reduce((sum, s) => sum + s.price, 0);
+  const totalWithBuffer = servicesDuration + STERILIZATION_BUFFER_MINUTES;
+
+  return {
+    servicesDurationMinutes: servicesDuration,
+    sterilizationBufferMinutes: STERILIZATION_BUFFER_MINUTES,
+    totalDurationMinutes: totalWithBuffer,
+    totalPrice,
+    servicesSummary: selected.map((s) => s.name),
+  };
+};
+
+// Загрузка / сохранение записей из localStorage
+const STORAGE_APPOINTMENTS_KEY = 'nail_app_appointments_v1';
+
+export const getStoredAppointments = (): Appointment[] => {
+  try {
+    const raw = localStorage.getItem(STORAGE_APPOINTMENTS_KEY);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error('Ошибка чтения appointments из localStorage:', e);
+  }
+
+  // Демо-записи для проверки реалистичной занятости мастера
+  const today = new Date().toISOString().split('T')[0];
+  const sampleAppointments: Appointment[] = [
+    {
+      id: 101,
+      client_id: 1,
+      client_name: 'Ольга Васильева',
+      client_phone: '+7 (916) 444-11-22',
+      client_username: 'olga_v',
+      master_id: 1,
+      date: today,
+      start_time: '10:00',
+      end_time: '12:00',
+      total_procedure_minutes: 120,
+      sterilization_buffer_minutes: 15,
+      total_duration_minutes: 135,
+      total_price: 2700,
+      status: 'confirmed',
+      comment: 'Люблю овальную форму, не срезайте кутикулу слишком глубоко.',
+      services: ['Снятие гель-лака другого мастера', 'Комбинированный маникюр + гель-лак', 'Французский маникюр (Френч / Лунный)'],
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: 102,
+      client_id: 2,
+      client_name: 'Мария Кузнецова',
+      client_phone: '+7 (903) 777-33-44',
+      client_username: 'kuznetsova_m',
+      master_id: 1,
+      date: today,
+      start_time: '16:00',
+      end_time: '18:30',
+      total_procedure_minutes: 150,
+      sterilization_buffer_minutes: 15,
+      total_duration_minutes: 165,
+      total_price: 3800,
+      status: 'confirmed',
+      comment: 'Хочу наращивание под нюд и легкий стемпинг.',
+      services: ['Без снятия', 'Наращивание ногтей (длина 1–3)', 'Без дизайна (чистый однотон)'],
+      created_at: new Date().toISOString(),
+    },
+  ];
+
+  localStorage.setItem(STORAGE_APPOINTMENTS_KEY, JSON.stringify(sampleAppointments));
+  return sampleAppointments;
+};
+
+export const saveAppointment = (appointment: Appointment) => {
+  const existing = getStoredAppointments();
+  const updated = [appointment, ...existing];
+  localStorage.setItem(STORAGE_APPOINTMENTS_KEY, JSON.stringify(updated));
+};
+
+// Хранилище настроек графика мастера
+const STORAGE_SCHEDULE_KEY = 'nail_app_master_schedule_v1';
+
+export const getStoredSchedule = (): Record<string, MasterScheduleDay> => {
+  try {
+    const raw = localStorage.getItem(STORAGE_SCHEDULE_KEY);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error('Ошибка чтения графика мастера из localStorage:', e);
+  }
+  return {};
+};
+
+export const saveStoredSchedule = (schedules: Record<string, MasterScheduleDay>) => {
+  try {
+    localStorage.setItem(STORAGE_SCHEDULE_KEY, JSON.stringify(schedules));
+  } catch (e) {
+    console.error('Ошибка записи графика мастера в localStorage:', e);
+  }
+};
+
+// Реализация алгоритма SmartSchedulingEngine на клиенте для мгновенного отклика
+export const computeAvailableSlotsLocal = (
+  targetDateStr: string,
+  totalDurationWithBuffer: number,
+  procedureDuration: number
+): { slots: AvailableSlot[]; isDayOff: boolean } => {
+  const targetDate = new Date(targetDateStr);
+  const dayOfWeek = targetDate.getDay(); // 0 - воскресенье
+
+  const storedSchedule = getStoredSchedule();
+  const customDay = storedSchedule[targetDateStr];
+
+  // Если день настроен мастером:
+  if (customDay) {
+    if (!customDay.is_working_day) {
+      return { slots: [], isDayOff: true };
+    }
+  } else {
+    // По умолчанию: воскресенье — выходной
+    if (dayOfWeek === 0) {
+      return { slots: [], isDayOff: true };
+    }
+  }
+
+  // Часы работы мастера
+  const parseTimeToMin = (tStr: string) => {
+    const [h, m] = tStr.split(':').map(Number);
+    return h * 60 + m;
+  };
+
+  const workStart = customDay ? parseTimeToMin(customDay.start_time) : 10 * 60;
+  const workEnd = customDay ? parseTimeToMin(customDay.end_time) : 20 * 60;
+
+  // Обед мастера
+  const busyBlocks: { start: number; end: number }[] = [];
+  if (customDay?.break_start && customDay?.break_end) {
+    busyBlocks.push({
+      start: parseTimeToMin(customDay.break_start),
+      end: parseTimeToMin(customDay.break_end),
+    });
+  } else if (!customDay) {
+    // Дефолтный обед: 14:00 - 15:00
+    busyBlocks.push({ start: 14 * 60, end: 15 * 60 });
+  }
+
+  // Добавляем существующие подтвержденные и ожидающие записи
+  const appointments = getStoredAppointments().filter(
+    (a) => a.date === targetDateStr && a.status !== 'cancelled'
+  );
+
+  appointments.forEach((app) => {
+    const [h, m] = app.start_time.split(':').map(Number);
+    const startM = h * 60 + m;
+    const endM = startM + app.total_duration_minutes; // с учетом буфера
+    busyBlocks.push({ start: startM, end: endM });
+  });
+
+  // Сортировка занятых блоков
+  busyBlocks.sort((a, b) => a.start - b.start);
+
+  // Слияние перекрывающихся занятых блоков
+  const mergedBusy: { start: number; end: number }[] = [];
+  for (const block of busyBlocks) {
+    if (mergedBusy.length === 0) {
+      mergedBusy.push({ ...block });
+    } else {
+      const last = mergedBusy[mergedBusy.length - 1];
+      if (block.start <= last.end) {
+        last.end = Math.max(last.end, block.end);
+      } else {
+        mergedBusy.push({ ...block });
+      }
+    }
+  }
+
+  // Поиск свободных окон (Free Blocks)
+  const freeBlocks: { start: number; end: number }[] = [];
+  let cursor = workStart;
+
+  for (const busy of mergedBusy) {
+    const bStart = Math.max(workStart, busy.start);
+    const bEnd = Math.min(workEnd, busy.end);
+
+    if (bStart > cursor) {
+      freeBlocks.push({ start: cursor, end: bStart });
+    }
+    cursor = Math.max(cursor, bEnd);
+  }
+  if (cursor < workEnd) {
+    freeBlocks.push({ start: cursor, end: workEnd });
+  }
+
+  // Генерация слотов с шагом 15 минут
+  const step = 15;
+  const slots: AvailableSlot[] = [];
+
+  // Ограничение по текущему времени, если запись на сегодня
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  let minStartM = 0;
+  if (targetDateStr === todayStr) {
+    minStartM = now.getHours() * 60 + now.getMinutes() + 30; // +30 мин на сборы
+  }
+
+  const formatTime = (minutes: number): string => {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
+
+  for (const block of freeBlocks) {
+    const blockDuration = block.end - block.start;
+    if (blockDuration < totalDurationWithBuffer) {
+      continue;
+    }
+
+    let start = block.start;
+    const remainder = start % step;
+    if (remainder !== 0) {
+      start += step - remainder;
+    }
+
+    while (start + totalDurationWithBuffer <= block.end) {
+      if (start >= minStartM) {
+        slots.push({
+          start_time: formatTime(start),
+          end_time: formatTime(start + procedureDuration),
+          buffer_end_time: formatTime(start + totalDurationWithBuffer),
+          start_minutes: start,
+        });
+      }
+      start += step;
+    }
+  }
+
+  return { slots, isDayOff: false };
+};
+
+export const api = {
+  getServices: async (): Promise<CategorizedServices> => {
+    try {
+      const res = await fetch('/api/services');
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // Если FastAPI сервер не запущен в текущем контейнере, используем локальные данные
+    }
+    return INITIAL_SERVICES;
+  },
+
+  getAvailableSlots: async (
+    masterId: number,
+    dateStr: string,
+    serviceIds: number[]
+  ): Promise<{ timing: CalculatedTiming; slots: AvailableSlot[]; isDayOff: boolean }> => {
+    const timing = calculateTiming(serviceIds);
+    try {
+      const res = await fetch('/api/slots', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          master_id: masterId,
+          target_date: dateStr,
+          service_ids: serviceIds,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return {
+          timing,
+          slots: data.available_slots || [],
+          isDayOff: data.is_day_off || false,
+        };
+      }
+    } catch {
+      // Локальный фоллбек
+    }
+
+    const { slots, isDayOff } = computeAvailableSlotsLocal(
+      dateStr,
+      timing.totalDurationMinutes,
+      timing.servicesDurationMinutes
+    );
+
+    return { timing, slots, isDayOff };
+  },
+
+  createAppointment: async (booking: BookingState): Promise<Appointment> => {
+    const allServices = getAllFlatServices();
+    const selectedIds = [
+      booking.selectedRemovalId,
+      booking.selectedBaseId,
+      booking.selectedDesignId,
+      ...booking.selectedRepairIds,
+    ].filter((id): id is number => id !== null);
+
+    const timing = calculateTiming(selectedIds);
+    const selectedServiceNames = allServices
+      .filter((s) => selectedIds.includes(s.id))
+      .map((s) => s.name);
+
+    const payload = {
+      master_id: 1,
+      tg_id: booking.tgId,
+      client_name: booking.clientName,
+      client_phone: booking.clientPhone,
+      client_username: booking.clientUsername,
+      date: booking.targetDate,
+      start_time: booking.selectedSlot?.start_time || '12:00',
+      service_ids: selectedIds,
+      photo_current_url_or_file_id: booking.photoCurrent,
+      photo_ref_url_or_file_id: booking.photoRef,
+      comment: booking.comment,
+    };
+
+    try {
+      const res = await fetch('/api/appointments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        saveAppointment(created);
+        return created;
+      }
+    } catch {
+      // Сохраняем локально при отсутствии прямого соединения с FastAPI
+    }
+
+    const newAppointment: Appointment = {
+      id: Date.now(),
+      client_id: booking.tgId,
+      client_name: booking.clientName,
+      client_phone: booking.clientPhone,
+      client_username: booking.clientUsername,
+      master_id: 1,
+      date: booking.targetDate,
+      start_time: booking.selectedSlot?.start_time || '12:00',
+      end_time: booking.selectedSlot?.end_time || '14:00',
+      total_procedure_minutes: timing.servicesDurationMinutes,
+      sterilization_buffer_minutes: timing.sterilizationBufferMinutes,
+      total_duration_minutes: timing.totalDurationMinutes,
+      total_price: timing.totalPrice,
+      status: 'pending',
+      photo_current: booking.photoCurrent || undefined,
+      photo_ref: booking.photoRef || undefined,
+      comment: booking.comment || undefined,
+      services: selectedServiceNames,
+      created_at: new Date().toISOString(),
+    };
+
+    saveAppointment(newAppointment);
+    return newAppointment;
+  },
+
+  getMasterMonthSchedule: async (masterId: number, month: string): Promise<MasterMonthOverview> => {
+    try {
+      const res = await fetch(`/api/schedule/month?master_id=${masterId}&month=${month}`);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // Использование локального хранилища
+    }
+
+    // Локальный генератор данных месяца на основе localStorage
+    const [yearStr, monthStr] = month.split('-');
+    const year = parseInt(yearStr, 10);
+    const monthNum = parseInt(monthStr, 10);
+    const daysInMonth = new Date(year, monthNum, 0).getDate();
+
+    const storedSchedule = getStoredSchedule();
+    const storedAppointments = getStoredAppointments();
+
+    const days: MonthDaySchedule[] = [];
+    let totalWorking = 0;
+    let totalApps = 0;
+    let totalRevenue = 0;
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dt = new Date(year, monthNum - 1, d);
+      const dayOfWeek = (dt.getDay() + 6) % 7; // 0=Пн, 6=Вс
+
+      const custom = storedSchedule[dateStr];
+      const isWorking = custom !== undefined ? custom.is_working_day : dayOfWeek !== 6;
+      const startTime = custom?.start_time || '10:00';
+      const endTime = custom?.end_time || '20:00';
+      const breakStart = custom?.break_start || '14:00';
+      const breakEnd = custom?.break_end || '15:00';
+      const buffer = custom?.sterilization_buffer_minutes || 15;
+
+      const dayApps = storedAppointments.filter(
+        (a) => a.date === dateStr && a.status !== 'cancelled'
+      );
+      const dayRev = dayApps.reduce((sum, a) => sum + a.total_price, 0);
+
+      if (isWorking) totalWorking++;
+      totalApps += dayApps.length;
+      totalRevenue += dayRev;
+
+      days.push({
+        date: dateStr,
+        day_number: d,
+        day_of_week: dayOfWeek,
+        is_working_day: isWorking,
+        start_time: startTime,
+        end_time: endTime,
+        break_start: breakStart,
+        break_end: breakEnd,
+        sterilization_buffer_minutes: buffer,
+        appointments_count: dayApps.length,
+        revenue_expected: dayRev,
+      });
+    }
+
+    return {
+      master_id: masterId,
+      month,
+      days,
+      total_working_days: totalWorking,
+      total_appointments: totalApps,
+      total_revenue: totalRevenue,
+    };
+  },
+
+  applyScheduleTemplate: async (
+    settings: ScheduleTemplateSettings,
+    masterId: number = 1
+  ): Promise<{ success: boolean; message: string }> => {
+    try {
+      const res = await fetch('/api/schedule/template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          master_id: masterId,
+          month: settings.month,
+          pattern: settings.pattern,
+          start_time: settings.startTime,
+          end_time: settings.endTime,
+          break_start: settings.breakStart,
+          break_end: settings.breakEnd,
+          sterilization_buffer_minutes: settings.sterilizationBufferMinutes,
+          custom_working_dates: settings.customWorkingDates,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return { success: true, message: data.message };
+      }
+    } catch {
+      // Фоллбек на локальное хранилище
+    }
+
+    // Локальное применение шаблона в localStorage
+    const [yearStr, monthStr] = settings.month.split('-');
+    const year = parseInt(yearStr, 10);
+    const monthNum = parseInt(monthStr, 10);
+    const daysInMonth = new Date(year, monthNum, 0).getDate();
+
+    const stored = getStoredSchedule();
+    const customSet = new Set(settings.customWorkingDates || []);
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dt = new Date(year, monthNum - 1, d);
+      const dayOfWeek = (dt.getDay() + 6) % 7; // 0=Пн, 6=Вс
+
+      let isWork = true;
+      if (settings.pattern === '5_2') {
+        isWork = dayOfWeek < 5; // Пн-Пт
+      } else if (settings.pattern === '2_2') {
+        isWork = ((d - 1) % 4) < 2;
+      } else if (settings.pattern === 'all') {
+        isWork = true;
+      } else if (settings.pattern === 'custom') {
+        isWork = customSet.has(dateStr);
+      }
+
+      stored[dateStr] = {
+        date: dateStr,
+        is_working_day: isWork,
+        start_time: settings.startTime,
+        end_time: settings.endTime,
+        break_start: settings.breakStart,
+        break_end: settings.breakEnd,
+        sterilization_buffer_minutes: settings.sterilizationBufferMinutes,
+      };
+    }
+
+    saveStoredSchedule(stored);
+    return {
+      success: true,
+      message: `Шаблон '${settings.pattern}' успешно сохранен на ${settings.month}`,
+    };
+  },
+
+  setDaySchedule: async (
+    masterId: number,
+    day: MasterScheduleDay
+  ): Promise<{ success: boolean; message: string }> => {
+    try {
+      const res = await fetch(`/api/schedule/day?master_id=${masterId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(day),
+      });
+      if (res.ok) {
+        return { success: true, message: 'День успешно обновлен' };
+      }
+    } catch {
+      // Фоллбек
+    }
+
+    const stored = getStoredSchedule();
+    stored[day.date] = day;
+    saveStoredSchedule(stored);
+    return { success: true, message: `День ${day.date} успешно сохранен` };
+  },
+};
