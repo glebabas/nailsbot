@@ -1,6 +1,59 @@
 import React, { useRef } from 'react';
-import { Camera, Upload, ArrowLeft, Image as ImageIcon, X, Sparkles, HelpCircle, Check } from 'lucide-react';
+import { Camera, Upload, ArrowLeft, Image as ImageIcon, X, Sparkles, HelpCircle, Check, Loader2 } from 'lucide-react';
 import { triggerHaptic } from '../utils/telegram';
+
+// Функция клиентского сжатия фото через HTML5 Canvas
+// Превращает 10-15 МБ фото с камеры смартфона в оптимизированные ~100-200 КБ
+const compressImage = (
+  file: File,
+  maxWidth = 1200,
+  maxHeight = 1200,
+  quality = 0.72
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.src = objectUrl;
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      let { width, height } = img;
+
+      // Пропорциональное уменьшение сторон
+      if (width > maxWidth || height > maxHeight) {
+        if (width / height > maxWidth / maxHeight) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        } else {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        // Фоллбэк на FileReader, если canvas не поддерживается
+        const fallbackReader = new FileReader();
+        fallbackReader.onloadend = () => resolve(fallbackReader.result as string);
+        fallbackReader.onerror = reject;
+        fallbackReader.readAsDataURL(file);
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0, width, height);
+      const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+      resolve(compressedDataUrl);
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Не удалось прочитать изображение'));
+    };
+  });
+};
 
 interface PhotoUploadProps {
   photoCurrent: string | null;
@@ -49,20 +102,29 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
   };
   const currentFileInputRef = useRef<HTMLInputElement>(null);
   const refFileInputRef = useRef<HTMLInputElement>(null);
+  const [isCompressingCurrent, setIsCompressingCurrent] = React.useState(false);
+  const [isCompressingRef, setIsCompressingRef] = React.useState(false);
 
-  const handleFileUpload = (
+  const handleFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
-    setter: (val: string | null) => void
+    setter: (val: string | null) => void,
+    setLoading: (val: boolean) => void
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
+    try {
+      setLoading(true);
+      // Сжимаем фото перед отправкой (макс 1200px, 72% качество JPEG)
+      const compressed = await compressImage(file, 1200, 1200, 0.72);
       triggerHaptic('success');
-      setter(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+      setter(compressed);
+    } catch (err) {
+      console.error('Ошибка сжатия фото:', err);
+    } finally {
+      setLoading(false);
+      e.target.value = '';
+    }
   };
 
   // Демо-шаблоны фотографий для быстрого тестирования в браузере
@@ -162,22 +224,28 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={(e) => handleFileUpload(e, setPhotoCurrent)}
+              onChange={(e) => handleFileUpload(e, setPhotoCurrent, setIsCompressingCurrent)}
             />
             <div
               id="dropzone-current-photo"
-              onClick={() => currentFileInputRef.current?.click()}
-              className="border-2 border-dashed border-stone-300 hover:border-rose-400 p-5 rounded-2xl bg-white text-center cursor-pointer transition-colors space-y-2 group"
+              onClick={() => !isCompressingCurrent && currentFileInputRef.current?.click()}
+              className={`border-2 border-dashed border-stone-300 hover:border-rose-400 p-5 rounded-2xl bg-white text-center cursor-pointer transition-colors space-y-2 group ${
+                isCompressingCurrent ? 'opacity-70 pointer-events-none' : ''
+              }`}
             >
               <div className="w-10 h-10 rounded-full bg-stone-100 group-hover:bg-rose-50 text-stone-500 group-hover:text-rose-500 flex items-center justify-center mx-auto transition-colors">
-                <Upload className="w-5 h-5" />
+                {isCompressingCurrent ? (
+                  <Loader2 className="w-5 h-5 text-rose-500 animate-spin" />
+                ) : (
+                  <Upload className="w-5 h-5" />
+                )}
               </div>
               <div>
                 <p className="text-xs font-semibold text-stone-800">
-                  Нажмите для загрузки фото ногтей
+                  {isCompressingCurrent ? 'Оптимизация и сжатие фото...' : 'Нажмите для загрузки фото ногтей'}
                 </p>
                 <p className="text-[11px] text-stone-400 mt-0.5">
-                  Сфотографируйте пальцы при дневном свете
+                  {isCompressingCurrent ? 'Уменьшаем размер перед отправкой' : 'Сфотографируйте пальцы при дневном свете'}
                 </p>
               </div>
             </div>
@@ -249,22 +317,28 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={(e) => handleFileUpload(e, setPhotoRef)}
+              onChange={(e) => handleFileUpload(e, setPhotoRef, setIsCompressingRef)}
             />
             <div
               id="dropzone-ref-photo"
-              onClick={() => refFileInputRef.current?.click()}
-              className="border-2 border-dashed border-stone-300 hover:border-rose-400 p-5 rounded-2xl bg-white text-center cursor-pointer transition-colors space-y-2 group"
+              onClick={() => !isCompressingRef && refFileInputRef.current?.click()}
+              className={`border-2 border-dashed border-stone-300 hover:border-rose-400 p-5 rounded-2xl bg-white text-center cursor-pointer transition-colors space-y-2 group ${
+                isCompressingRef ? 'opacity-70 pointer-events-none' : ''
+              }`}
             >
               <div className="w-10 h-10 rounded-full bg-stone-100 group-hover:bg-rose-50 text-stone-500 group-hover:text-rose-500 flex items-center justify-center mx-auto transition-colors">
-                <ImageIcon className="w-5 h-5" />
+                {isCompressingRef ? (
+                  <Loader2 className="w-5 h-5 text-rose-500 animate-spin" />
+                ) : (
+                  <ImageIcon className="w-5 h-5" />
+                )}
               </div>
               <div>
                 <p className="text-xs font-semibold text-stone-800">
-                  Прикрепите скриншот дизайна
+                  {isCompressingRef ? 'Оптимизация и сжатие фото...' : 'Прикрепите скриншот дизайна'}
                 </p>
                 <p className="text-[11px] text-stone-400 mt-0.5">
-                  Из Pinterest, Instagram или Telegram
+                  {isCompressingRef ? 'Уменьшаем размер перед отправкой' : 'Из Pinterest, Instagram или Telegram'}
                 </p>
               </div>
             </div>

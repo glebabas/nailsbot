@@ -163,8 +163,8 @@ class Appointment(Base):
     )
     
     # Фото-система перед записью
-    photo_current: Mapped[Optional[str]] = mapped_column(String(500), nullable=True, comment="URL/FileID фото текущих ногтей (Исходник)")
-    photo_ref: Mapped[Optional[str]] = mapped_column(String(500), nullable=True, comment="URL/FileID фото желаемого дизайна (Референс)")
+    photo_current: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="URL/FileID фото текущих ногтей (Исходник)")
+    photo_ref: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="URL/FileID фото желаемого дизайна (Референс)")
     comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="Комментарий клиента к референсу")
     
     # Флаги напоминаний и подтверждений (T-24h, T-12h, T-8h)
