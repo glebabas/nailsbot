@@ -210,7 +210,7 @@ class GlobalConfig(Base):
     __tablename__ = "global_configs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    master_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True)
+    master_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, unique=True)
     
     default_sterilization_buffer: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
     auto_cancel_hours_before: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
