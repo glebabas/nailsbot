@@ -26,7 +26,15 @@ import { Settings } from 'lucide-react';
 
 export const MasterView: React.FC = () => {
   const tgUser = getTelegramUser();
-  const [activeTab, setActiveTab] = useState<'appointments' | 'schedule' | 'settings'>('appointments');
+  const [activeTab, setActiveTab] = useState<'appointments' | 'schedule' | 'settings'>(() => {
+    if (typeof window !== 'undefined') {
+      const tabParam = new URLSearchParams(window.location.search).get('tab');
+      if (tabParam === 'settings' || tabParam === 'schedule' || tabParam === 'appointments') {
+        return tabParam;
+      }
+    }
+    return 'appointments';
+  });
   const [studioConfig, setStudioConfig] = useState<StudioConfig | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(
@@ -97,6 +105,24 @@ export const MasterView: React.FC = () => {
             </p>
           </div>
         </div>
+
+        <button
+          id="master-header-settings-btn"
+          type="button"
+          onClick={() => {
+            triggerHaptic('light');
+            setActiveTab(activeTab === 'settings' ? 'appointments' : 'settings');
+          }}
+          className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 shadow-2xs ${
+            activeTab === 'settings'
+              ? 'bg-rose-500 text-white border-rose-600 shadow-xs'
+              : 'bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200'
+          }`}
+          title="Настройки студии и услуг"
+        >
+          <Settings className={`w-3.5 h-3.5 ${activeTab === 'settings' ? 'text-white' : 'text-rose-500'}`} />
+          <span>Настройки</span>
+        </button>
       </div>
 
       {/* Вкладки: Записи / График / Настройки */}

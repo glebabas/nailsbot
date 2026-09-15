@@ -136,7 +136,12 @@ export const getTelegramUser = () => {
   };
 };
 
-export const MASTER_TG_IDS = [549120491, 123456789];
+const envMasterIds = ((import.meta as any).env?.VITE_MASTER_TG_IDS as string | undefined)
+  ?.split(',')
+  .map((s: string) => parseInt(s.trim(), 10))
+  .filter(Boolean) || [];
+
+export const MASTER_TG_IDS = Array.from(new Set([781432351, 549120491, 123456789, ...envMasterIds]));
 
 export const isUserMaster = (): boolean => {
   const tg = getTelegramWebApp();

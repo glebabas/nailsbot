@@ -84,12 +84,18 @@ def get_client_keyboard(webapp_url: str, master_username: str) -> InlineKeyboard
 
 
 def get_master_keyboard(webapp_url: str, master_username: str) -> InlineKeyboardMarkup:
-    """Клавиатура для мастера: выделенный Кабинет Мастера"""
+    """Клавиатура для мастера: Кабинет Мастера и Настройки"""
     buttons = [
         [
             InlineKeyboardButton(
-                text="⚙️ Кабинет мастера (Mini App)",
+                text="⚙️ Кабинет мастера (Записи и График)",
                 web_app=WebAppInfo(url=f"{webapp_url}?role=master")
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🛠 Настройки (Услуги, Адрес, Аватарка)",
+                web_app=WebAppInfo(url=f"{webapp_url}?role=master&tab=settings")
             )
         ],
         [
@@ -116,7 +122,7 @@ async def command_start_handler(message: Message):
     """
     Обработка команды /start:
     - Проверяет Telegram ID.
-    - Мастеру выдает меню с управлением расписанием и кабинетом.
+    - Мастеру выдает меню с управлением расписанием, услугами и кабинетом.
     - Клиенту выдает приветствие и кнопки записи и связи с мастером.
     """
     user = message.from_user
@@ -131,12 +137,13 @@ async def command_start_handler(message: Message):
         text = (
             f"👋 <b>Здравствуйте, {first_name}! (Панель мастера)</b>\n\n"
             f"Вы авторизованы как мастер ногтевого сервиса.\n\n"
-            f"Вам доступен <b>Кабинет мастера</b>:\n"
-            f"• 🗓️ Настройка рабочего графика и шаблонов на месяц\n"
-            f"• 📋 Просмотр записей клиентов с фото исходников и референсов\n"
-            f"• ⏱️ Учет 15-минутного буфера стерилизации инструментов\n"
-            f"• 💰 Контроль плановой выручки\n\n"
-            f"Нажмите кнопку ниже для перехода в интерфейс управления:"
+            f"Вам доступны функции управления:\n"
+            f"• 🛠️ <b>Настройки:</b> название студии, адрес, аватарка, каталог услуг и цены\n"
+            f"• 🗓️ <b>График:</b> рабочие смены и шаблоны на месяц\n"
+            f"• 📋 <b>Записи:</b> карточки клиентов с референсами и фото исходников\n"
+            f"• ⏱️ <b>Стерилизация:</b> учет 15-минутного буфера\n"
+            f"• 💰 <b>Выручка:</b> расчет планового дохода\n\n"
+            f"Нажмите кнопку ниже, чтобы открыть нужный раздел:"
         )
         keyboard = get_master_keyboard(WEBAPP_URL, MASTER_USERNAME)
     else:
@@ -153,6 +160,40 @@ async def command_start_handler(message: Message):
         keyboard = get_client_keyboard(WEBAPP_URL, MASTER_USERNAME)
 
     await message.answer(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
+
+
+# =====================================================================
+# КОМАНДА /settings
+# =====================================================================
+@router.message(Command("settings"))
+async def command_settings_handler(message: Message):
+    """Прямая команда /settings для открытия настроек студии и услуг"""
+    user = message.from_user
+    user_id = user.id if user else 0
+    if not is_master_user(user_id):
+        await message.answer("Эта команда доступна только мастеру.")
+        return
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🛠 Открыть Настройки (Mini App)",
+                    web_app=WebAppInfo(url=f"{WEBAPP_URL}?role=master&tab=settings")
+                )
+            ]
+        ]
+    )
+    await message.answer(
+        "🛠 <b>Настройки студии и каталога услуг</b>\n\n"
+        "Здесь вы можете:\n"
+        "• Изменить название студии и адрес\n"
+        "• Загрузить фото/аватарку студии\n"
+        "• Добавлять, редактировать или удалять услуги и цены\n\n"
+        "Нажмите кнопку ниже, чтобы открыть настройки:",
+        reply_markup=keyboard,
+        parse_mode=ParseMode.HTML
+    )
 
 
 # =====================================================================
