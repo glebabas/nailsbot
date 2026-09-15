@@ -7,13 +7,15 @@ FastAPI Router для Telegram Mini App мастера маникюра.
 4. GET  /api/schedule    — Расписание и загрузка мастера на день / месяц
 """
 
+import os
 from datetime import date, datetime, time, timedelta
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from backend.database import get_db
+from backend.notifications import notify_new_booking_created
 from backend.models import (
     User, UserRole, Service, ServiceCategory,
     MasterSchedule, Appointment, AppointmentStatus, appointment_services_table,
@@ -215,7 +217,11 @@ def calculate_available_slots(payload: SlotsRequest, db: Session = Depends(get_d
     status_code=status.HTTP_201_CREATED,
     summary="Создание бронирования с загрузкой исходника и референса"
 )
-def create_appointment(payload: AppointmentCreateRequest, db: Session = Depends(get_db)):
+def create_appointment(
+    payload: AppointmentCreateRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
     """
     Создает бронирование:
     1. Находит или создает профиль клиента по Telegram ID (`tg_id`).
@@ -330,6 +336,37 @@ def create_appointment(payload: AppointmentCreateRequest, db: Session = Depends(
 
     db.commit()
     db.refresh(appointment)
+
+    # Запуск фоновой отправки мгновенных талонов клиенту и алертов мастеру
+    try:
+        conf = db.query(GlobalConfig).first()
+        studio_addr = conf.studio_address if conf and conf.studio_address else "г. Москва, ул. Арбат, д. 10"
+        studio_n = conf.studio_name if conf and conf.studio_name else "Студия маникюра"
+        master_ids_list = [
+            int(x.strip()) for x in os.getenv("MASTER_TG_IDS", "1324896381,781432351").split(",") if x.strip()
+        ]
+
+        background_tasks.add_task(
+            notify_new_booking_created,
+            appointment_id=appointment.id,
+            client_tg_id=client.tg_id,
+            client_name=client.first_name,
+            client_username=client.username,
+            client_phone=client.phone,
+            app_date=appointment.date,
+            start_time=appointment.start_time,
+            end_time=appointment.end_time,
+            total_procedure_minutes=appointment.total_procedure_minutes,
+            total_price=float(appointment.total_price),
+            service_names=[s.name for s in services],
+            comment=appointment.comment,
+            studio_name=studio_n,
+            studio_address=studio_addr,
+            master_tg_ids=master_ids_list,
+        )
+    except Exception as e:
+        # Логируем, но не блокируем успешный ответ клиенту
+        print(f"Ошибка постановки задачи уведомления: {e}")
 
     return AppointmentResponse(
         id=appointment.id,

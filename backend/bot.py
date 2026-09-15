@@ -14,7 +14,8 @@ Telegram Bot для онлайн-записи мастера маникюра н
 import os
 import logging
 import asyncio
-from typing import Optional
+from typing import Optional, List
+from datetime import datetime, date, time, timedelta
 
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.filters import CommandStart, Command
@@ -27,6 +28,9 @@ from aiogram.types import (
 )
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
+
+from backend.database import SessionLocal
+from backend.models import Appointment, AppointmentStatus, User, UserRole, GlobalConfig
 
 # Логирование
 logging.basicConfig(
@@ -320,18 +324,195 @@ async def callback_master_summary(callback: CallbackQuery):
 
 
 # =====================================================================
-# ОБРАБОТКА ТЕКСТОВОГО СПАМА / НЕИЗВЕСТНЫХ СООБЩЕНИЙ
+# ОБРАБОТЧИКИ ПОДТВЕРЖДЕНИЙ, ОТМЕН И ОТЗЫВОВ КЛИЕНТА
+# =====================================================================
+@router.callback_query(F.data.startswith("confirm:"))
+async def callback_confirm_handler(callback: CallbackQuery):
+    """Клиент подтверждает визит за 48ч или 24ч"""
+    app_id = int(callback.data.split(":")[1])
+    db = SessionLocal()
+    try:
+        app = db.query(Appointment).filter(Appointment.id == app_id).first()
+        if not app:
+            await callback.answer("Запись не найдена", show_alert=True)
+            return
+
+        if app.status == AppointmentStatus.CANCELLED:
+            await callback.answer("Эта запись была ранее отменена", show_alert=True)
+            return
+
+        app.status = AppointmentStatus.CONFIRMED
+        app.confirmed_at = datetime.now()
+        db.commit()
+
+        await callback.answer("Запись подтверждена! Ждём вас 💅")
+        await callback.message.edit_text(
+            f"✅ <b>Запись подтверждена!</b>\n\n"
+            f"📅 <b>{app.date.strftime('%d.%m.%Y')} в {app.start_time.strftime('%H:%M')}</b>\n"
+            f"Ждём вас к назначенному времени ✨",
+            parse_mode=ParseMode.HTML
+        )
+
+        # Уведомляем мастера
+        client_name = app.client.first_name if app.client else "Клиент"
+        uname_str = f"(@{app.client.username})" if app.client and app.client.username else ""
+        services_str = ", ".join(s.name for s in app.services) if app.services else "Маникюр"
+        master_msg = (
+            f"✅ <b>Клиент подтвердил запись!</b>\n\n"
+            f"👤 Клиент: <b>{client_name}</b> {uname_str}\n"
+            f"📅 <b>{app.date.strftime('%d.%m.%Y')} в {app.start_time.strftime('%H:%M')}</b>\n"
+            f"💅 {services_str}"
+        )
+        for mid in MASTER_TG_IDS:
+            try:
+                await callback.bot.send_message(mid, master_msg, parse_mode=ParseMode.HTML)
+            except Exception:
+                pass
+    finally:
+        db.close()
+
+
+@router.callback_query(F.data.startswith("cancel_client:"))
+async def callback_cancel_client_handler(callback: CallbackQuery):
+    """Клиент отменяет визит по кнопке"""
+    app_id = int(callback.data.split(":")[1])
+    db = SessionLocal()
+    try:
+        app = db.query(Appointment).filter(Appointment.id == app_id).first()
+        if not app:
+            await callback.answer("Запись не найдена", show_alert=True)
+            return
+
+        app.status = AppointmentStatus.CANCELLED
+        app.cancelled_at = datetime.now()
+        app.cancellation_reason = "Отменено клиентом в Telegram"
+        db.commit()
+
+        await callback.answer("Запись отменена")
+        await callback.message.edit_text(
+            f"❌ <b>Запись отменена</b>\n\n"
+            f"Слот на {app.date.strftime('%d.%m.%Y')} в {app.start_time.strftime('%H:%M')} освобождён.\n"
+            f"Будем рады видеть вас в другой раз! 🌸",
+            parse_mode=ParseMode.HTML
+        )
+
+        # Уведомляем мастера
+        client_name = app.client.first_name if app.client else "Клиент"
+        uname_str = f"(@{app.client.username})" if app.client and app.client.username else ""
+        master_msg = (
+            f"❌ <b>Клиент отменил запись</b>\n\n"
+            f"👤 Клиент: <b>{client_name}</b> {uname_str}\n"
+            f"📅 <b>{app.date.strftime('%d.%m.%Y')} в {app.start_time.strftime('%H:%M')}</b>\n"
+            f"Слот снова свободен в графике."
+        )
+        for mid in MASTER_TG_IDS:
+            try:
+                await callback.bot.send_message(mid, master_msg, parse_mode=ParseMode.HTML)
+            except Exception:
+                pass
+    finally:
+        db.close()
+
+
+@router.callback_query(F.data.startswith("rate:"))
+async def callback_rate_handler(callback: CallbackQuery):
+    """Клиент ставит оценку 1..5 звёзд в 1 клик"""
+    parts = callback.data.split(":")
+    app_id = int(parts[1])
+    stars = int(parts[2])
+
+    db = SessionLocal()
+    try:
+        app = db.query(Appointment).filter(Appointment.id == app_id).first()
+        if not app:
+            await callback.answer("Запись не найдена", show_alert=True)
+            return
+
+        app.feedback_rating = stars
+        db.commit()
+
+        stars_str = "⭐" * stars
+        await callback.answer(f"Спасибо за оценку {stars}/5!")
+        await callback.message.edit_text(
+            f"⭐ <b>Ваша оценка: {stars_str} ({stars}/5)</b>\n\n"
+            f"Спасибо большое за обратную связь! 💖\n"
+            f"<i>(Если хотите оставить пару слов или пожелание мастеру, просто напишите в ответном сообщении)</i>",
+            parse_mode=ParseMode.HTML
+        )
+
+        # Уведомляем мастера
+        client_name = app.client.first_name if app.client else "Клиент"
+        uname_str = f"(@{app.client.username})" if app.client and app.client.username else ""
+        master_msg = (
+            f"⭐ <b>Новая оценка от клиента!</b>\n\n"
+            f"👤 Клиент: <b>{client_name}</b> {uname_str}\n"
+            f"Оценка: <b>{stars} из 5</b> {stars_str}\n"
+            f"Дата визита: {app.date.strftime('%d.%m.%Y')}"
+        )
+        for mid in MASTER_TG_IDS:
+            try:
+                await callback.bot.send_message(mid, master_msg, parse_mode=ParseMode.HTML)
+            except Exception:
+                pass
+    finally:
+        db.close()
+
+
+# =====================================================================
+# ОБРАБОТКА ТЕКСТОВЫХ СООБЩЕНИЙ (ОТЗЫВЫ ИЛИ СПАМ)
 # =====================================================================
 @router.message()
 async def fallback_text_handler(message: Message):
     """
-    Игнорирует спам и вежливо возвращает пользователя к основному меню
-    без использования внешних ИИ-моделей.
+    1. Если клиент недавно поставил оценку — сохраняет текстовый отзыв.
+    2. Иначе вежливо возвращает пользователя к основному меню.
     """
     user_id = message.from_user.id if message.from_user else 0
     is_master = is_master_user(user_id)
 
-    # Вежливый короткий ответ с меню
+    # Проверяем, не является ли это текстовым отзывом после оценки в течение последних 24ч
+    db = SessionLocal()
+    try:
+        recent_feedback_app = (
+            db.query(Appointment)
+            .join(User, Appointment.client_id == User.id)
+            .filter(
+                User.tg_id == user_id,
+                Appointment.feedback_rating.isnot(None),
+                Appointment.feedback_text.is_(None),
+                Appointment.feedback_requested_at >= datetime.now() - timedelta(days=1)
+            )
+            .order_by(Appointment.id.desc())
+            .first()
+        )
+        if recent_feedback_app and message.text:
+            recent_feedback_app.feedback_text = message.text
+            db.commit()
+
+            await message.answer(
+                "💖 <b>Спасибо за ваш отзыв!</b>\n"
+                "Мастер обязательно его прочитает. Будем рады видеть вас снова! ✨",
+                parse_mode=ParseMode.HTML
+            )
+
+            client_name = recent_feedback_app.client.first_name if recent_feedback_app.client else "Клиент"
+            uname_str = f"(@{recent_feedback_app.client.username})" if recent_feedback_app.client and recent_feedback_app.client.username else ""
+            stars_visual = "⭐" * (recent_feedback_app.feedback_rating or 5)
+            master_alert = (
+                f"💬 <b>Отзыв от клиента {client_name} {uname_str}!</b>\n\n"
+                f"Оценка: <b>{recent_feedback_app.feedback_rating}/5</b> {stars_visual}\n"
+                f"Отзыв: <i>«{message.text}»</i>"
+            )
+            for mid in MASTER_TG_IDS:
+                try:
+                    await message.bot.send_message(mid, master_alert, parse_mode=ParseMode.HTML)
+                except Exception:
+                    pass
+            return
+    finally:
+        db.close()
+
+    # Стандартный ответ с меню
     text = (
         "Я работаю в автоматическом режиме для онлайн-записи. "
         "Пожалуйста, воспользуйтесь кнопкой ниже для перехода в <b>Mini App</b> "
@@ -342,16 +523,264 @@ async def fallback_text_handler(message: Message):
 
 
 # =====================================================================
+# ФОНОВЫЙ ШЕДУЛЕР УВЕДОМЛЕНИЙ (T-48h, T-24h, T-8h, T-2h, +1h, 90 дней)
+# =====================================================================
+async def check_and_send_scheduled_events(bot: Bot):
+    """Проверяет базу данных и отправляет необходимые уведомления по графику"""
+    db = SessionLocal()
+    try:
+        now = datetime.now()
+        conf = db.query(GlobalConfig).first()
+        studio_addr = conf.studio_address if conf and conf.studio_address else "г. Москва, ул. Арбат, д. 10"
+
+        recent_date = now.date() - timedelta(days=1)
+        future_date = now.date() + timedelta(days=3)
+
+        appointments = (
+            db.query(Appointment)
+            .filter(
+                Appointment.date >= recent_date,
+                Appointment.date <= future_date,
+            )
+            .all()
+        )
+
+        for app in appointments:
+            if not app.client or not app.client.tg_id:
+                continue
+
+            app_start = datetime.combine(app.date, app.start_time)
+            app_end = datetime.combine(app.date, app.end_time)
+            hours_to_start = (app_start - now).total_seconds() / 3600.0
+            hours_since_end = (now - app_end).total_seconds() / 3600.0
+
+            client_tg_id = app.client.tg_id
+            client_name = app.client.first_name
+            date_str = app.date.strftime("%d.%m.%Y")
+            start_str = app.start_time.strftime("%H:%M")
+            services_str = ", ".join(s.name for s in app.services) if app.services else "Маникюр"
+
+            # 1. Запрос подтверждения за 48 часов (от 48ч до 8ч, status=PENDING, reminder_48h не отправлен)
+            if 8.0 < hours_to_start <= 48.0 and app.status == AppointmentStatus.PENDING and app.reminder_48h_sent_at is None:
+                kb = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(text="✅ Подтверждаю", callback_data=f"confirm:{app.id}"),
+                            InlineKeyboardButton(text="❌ Не смогу прийти", callback_data=f"cancel_client:{app.id}")
+                        ]
+                    ]
+                )
+                text = (
+                    f"⏳ <b>Подтвердите запись на маникюр!</b>\n\n"
+                    f"📅 <b>{date_str} в {start_str}</b>\n"
+                    f"📍 {studio_addr}\n"
+                    f"💅 {services_str}\n"
+                    f"💰 {float(app.total_price):,.0f} ₽\n\n"
+                    f"Пожалуйста, подтвердите визит кнопкой ниже:"
+                )
+                try:
+                    await bot.send_message(client_tg_id, text, reply_markup=kb, parse_mode=ParseMode.HTML)
+                    app.reminder_48h_sent_at = now
+                    db.commit()
+                except Exception as ex:
+                    logger.warning(f"Не удалось отправить 48h напоминание в {client_tg_id}: {ex}")
+
+            # 2. Напоминание за 24 часа (от 24ч до 8ч, reminder_24h не отправлен)
+            elif 8.0 < hours_to_start <= 24.0 and app.reminder_24h_sent_at is None:
+                if app.status == AppointmentStatus.CONFIRMED:
+                    text = (
+                        f"🌸 <b>Напоминаем: завтра визит на маникюр!</b>\n\n"
+                        f"⏰ <b>{start_str}</b> | 📍 {studio_addr}\n"
+                        f"💅 {services_str}\n\n"
+                        f"💡 <i>Памятка: не наносите масло и жирный крем за 2–3 часа до визита.</i>"
+                    )
+                    try:
+                        await bot.send_message(client_tg_id, text, parse_mode=ParseMode.HTML)
+                        app.reminder_24h_sent_at = now
+                        db.commit()
+                    except Exception as ex:
+                        logger.warning(f"Не удалось отправить 24h напоминание в {client_tg_id}: {ex}")
+                elif app.status == AppointmentStatus.PENDING:
+                    kb = InlineKeyboardMarkup(
+                        inline_keyboard=[
+                            [
+                                InlineKeyboardButton(text="✅ Подтверждаю", callback_data=f"confirm:{app.id}"),
+                                InlineKeyboardButton(text="❌ Не смогу прийти", callback_data=f"cancel_client:{app.id}")
+                            ]
+                        ]
+                    )
+                    text = (
+                        f"⚠️ <b>Вы ещё не подтвердили визит на завтра!</b>\n\n"
+                        f"⏰ <b>{start_str}</b> | 📍 {studio_addr}\n\n"
+                        f"<i>Если запись не будет подтверждена за 8 часов до приёма, бронь автоматически аннулируется:</i>"
+                    )
+                    try:
+                        await bot.send_message(client_tg_id, text, reply_markup=kb, parse_mode=ParseMode.HTML)
+                        app.reminder_24h_sent_at = now
+                        db.commit()
+                    except Exception as ex:
+                        logger.warning(f"Не удалось отправить 24h запрос подтверждения в {client_tg_id}: {ex}")
+
+            # 3. Авто-отмена за 8 часов неподтверждённых записей
+            elif 0 < hours_to_start <= 8.0 and app.status == AppointmentStatus.PENDING:
+                app.status = AppointmentStatus.CANCELLED
+                app.cancelled_at = now
+                app.cancellation_reason = "Не подтверждено за 8 часов до приёма"
+                db.commit()
+
+                # Уведомление клиенту
+                client_cancel_text = (
+                    f"🚫 <b>Запись аннулирована</b>\n\n"
+                    f"Ваша запись на сегодня в {start_str} была отменена, "
+                    f"так как визит не был подтверждён за 8 часов.\n\n"
+                    f"Если хотите записаться на другое время, откройте Mini App по кнопке ниже:"
+                )
+                cancel_kb = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(text="💅 Записаться снова", web_app=WebAppInfo(url=f"{WEBAPP_URL}?role=client"))
+                        ]
+                    ]
+                )
+                try:
+                    await bot.send_message(client_tg_id, client_cancel_text, reply_markup=cancel_kb, parse_mode=ParseMode.HTML)
+                except Exception as ex:
+                    logger.warning(f"Ошибка отправки автоотмены клиенту {client_tg_id}: {ex}")
+
+                # Уведомление мастеру
+                uname_str = f"(@{app.client.username})" if app.client.username else ""
+                master_cancel_text = (
+                    f"⚠️ <b>Запись аннулирована по таймауту</b>\n\n"
+                    f"👤 Клиент: {client_name} {uname_str}\n"
+                    f"📅 Сегодня в {start_str}\n"
+                    f"Причина: визит не был подтверждён клиентом за 8 часов.\n\n"
+                    f"Слот свободен для других клиентов."
+                )
+                for mid in MASTER_TG_IDS:
+                    try:
+                        await bot.send_message(mid, master_cancel_text, parse_mode=ParseMode.HTML)
+                    except Exception:
+                        pass
+
+            # 4. Напоминание за 2 часа (только подтверждённым)
+            elif 0 < hours_to_start <= 2.0 and app.status == AppointmentStatus.CONFIRMED and app.reminder_2h_sent_at is None:
+                text = (
+                    f"⏰ <b>Ждём вас через 2 часа (в {start_str})!</b>\n\n"
+                    f"📍 <b>Адрес:</b> {studio_addr}\n"
+                    f"🔔 <b>Кабинет:</b> 204 (домофон 204В)\n\n"
+                    f"Приходите без опозданий, мастер уже готовит инструменты! ✨"
+                )
+                try:
+                    await bot.send_message(client_tg_id, text, parse_mode=ParseMode.HTML)
+                    app.reminder_2h_sent_at = now
+                    db.commit()
+                except Exception as ex:
+                    logger.warning(f"Ошибка отправки 2h напоминания клиенту {client_tg_id}: {ex}")
+
+            # 5. Сбор отзыва через 1-6 часов после окончания
+            elif 1.0 <= hours_since_end <= 6.0 and app.status in (AppointmentStatus.CONFIRMED, AppointmentStatus.COMPLETED) and app.feedback_requested_at is None:
+                app.status = AppointmentStatus.COMPLETED
+                rating_kb = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(text="⭐ 1", callback_data=f"rate:{app.id}:1"),
+                            InlineKeyboardButton(text="⭐ 2", callback_data=f"rate:{app.id}:2"),
+                            InlineKeyboardButton(text="⭐ 3", callback_data=f"rate:{app.id}:3"),
+                            InlineKeyboardButton(text="⭐ 4", callback_data=f"rate:{app.id}:4"),
+                            InlineKeyboardButton(text="⭐ 5", callback_data=f"rate:{app.id}:5"),
+                        ]
+                    ]
+                )
+                text = (
+                    f"💖 <b>Спасибо за визит!</b>\n\n"
+                    f"Как всё прошло? Оцените работу мастера в 1 клик:"
+                )
+                try:
+                    await bot.send_message(client_tg_id, text, reply_markup=rating_kb, parse_mode=ParseMode.HTML)
+                    app.feedback_requested_at = now
+                    db.commit()
+                except Exception as ex:
+                    logger.warning(f"Ошибка отправки запроса отзыва в {client_tg_id}: {ex}")
+
+        # 6. Реактивация спящих клиентов (не был 90 дней)
+        ninety_days_ago = now.date() - timedelta(days=90)
+        clients = db.query(User).filter(User.role == UserRole.CLIENT).all()
+        for cl in clients:
+            if not cl.tg_id:
+                continue
+            if cl.reactivation_sent_at and (now - cl.reactivation_sent_at).days < 90:
+                continue
+
+            has_upcoming = db.query(Appointment).filter(
+                Appointment.client_id == cl.id,
+                Appointment.date >= now.date(),
+                Appointment.status.in_([AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED])
+            ).first()
+            if has_upcoming:
+                continue
+
+            last_completed = db.query(Appointment).filter(
+                Appointment.client_id == cl.id,
+                Appointment.status == AppointmentStatus.COMPLETED
+            ).order_by(Appointment.date.desc()).first()
+
+            if last_completed and last_completed.date <= ninety_days_ago:
+                text = (
+                    f"👋 <b>{cl.first_name}, мы соскучились!</b>\n\n"
+                    f"Прошло уже 3 месяца с вашего прошлого визита. "
+                    f"Самое время порадовать себя свежим маникюром 💅"
+                )
+                kb = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text="💅 Выбрать время (Mini App)",
+                                web_app=WebAppInfo(url=f"{WEBAPP_URL}?role=client")
+                            )
+                        ]
+                    ]
+                )
+                try:
+                    await bot.send_message(cl.tg_id, text, reply_markup=kb, parse_mode=ParseMode.HTML)
+                    cl.reactivation_sent_at = now
+                    db.commit()
+                except Exception as ex:
+                    logger.warning(f"Не удалось отправить реактивацию клиенту {cl.tg_id}: {ex}")
+
+    except Exception as e:
+        logger.error(f"Ошибка в цикле шедулера: {e}", exc_info=True)
+    finally:
+        db.close()
+
+
+async def run_scheduler(bot: Bot):
+    """Бесконечный цикл планировщика (проверка каждую минуту)"""
+    logger.info("Фоновый планировщик уведомлений запущен.")
+    while True:
+        try:
+            await check_and_send_scheduled_events(bot)
+        except Exception as e:
+            logger.error(f"Непредвиденная ошибка в run_scheduler: {e}")
+        await asyncio.sleep(60)
+
+
+# =====================================================================
 # ТОЧКА ВХОДА БОТА
 # =====================================================================
 async def start_bot():
-    """Запуск long-polling бота"""
+    """Запуск long-polling бота и фонового планировщика"""
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
     dp.include_router(router)
 
+    # Фоновая задача шедулера напоминаний
+    scheduler_task = asyncio.create_task(run_scheduler(bot))
+
     logger.info("Бот запущен. Ожидание событий Telegram...")
-    await dp.start_polling(bot)
+    try:
+        await dp.start_polling(bot)
+    finally:
+        scheduler_task.cancel()
 
 
 if __name__ == "__main__":

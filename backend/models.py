@@ -78,6 +78,7 @@ class User(Base):
     
     strikes: Mapped[int] = mapped_column(Integer, default=0, nullable=False, comment="Количество пропусков записей")
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    reactivation_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, comment="Дата отправки предложения вернуться (через 90 дней)")
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -167,12 +168,20 @@ class Appointment(Base):
     photo_ref: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="URL/FileID фото желаемого дизайна (Референс)")
     comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="Комментарий клиента к референсу")
     
-    # Флаги напоминаний и подтверждений (T-24h, T-12h, T-8h)
-    reminder_24h_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    reminder_12h_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Флаги напоминаний и подтверждений (T-48h, T-24h, T-12h, T-8h, T-2h)
+    booking_notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, comment="Дата отправки мгновенного талона клиенту")
+    reminder_48h_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, comment="Запрос подтверждения за 48ч")
+    reminder_24h_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, comment="Напоминание за 24ч")
+    reminder_12h_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, comment="Резервное напоминание за 12ч")
+    reminder_2h_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, comment="Напоминание за 2ч с адресом и домофоном")
     confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     cancellation_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    
+    # Отзыв после процедуры (через 1ч)
+    feedback_requested_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, comment="Дата запроса отзыва")
+    feedback_rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, comment="Оценка клиента от 1 до 5 звёзд")
+    feedback_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="Текстовый комментарий клиента")
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
