@@ -84,7 +84,7 @@ def get_client_keyboard(webapp_url: str, master_username: str) -> InlineKeyboard
 
 
 def get_master_keyboard(webapp_url: str, master_username: str) -> InlineKeyboardMarkup:
-    """Клавиатура для мастера: Кабинет Мастера и Настройки"""
+    """Клавиатура для мастера: Кабинет Мастера, Настройки и Тест клиента"""
     buttons = [
         [
             InlineKeyboardButton(
@@ -96,6 +96,12 @@ def get_master_keyboard(webapp_url: str, master_username: str) -> InlineKeyboard
             InlineKeyboardButton(
                 text="🛠 Настройки (Услуги, Адрес, Аватарка)",
                 web_app=WebAppInfo(url=f"{webapp_url}?role=master&tab=settings")
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="👁️ Предпросмотр (как клиент)",
+                web_app=WebAppInfo(url=f"{webapp_url}?role=client")
             )
         ],
         [
@@ -142,7 +148,8 @@ async def command_start_handler(message: Message):
             f"• 🗓️ <b>График:</b> рабочие смены и шаблоны на месяц\n"
             f"• 📋 <b>Записи:</b> карточки клиентов с референсами и фото исходников\n"
             f"• ⏱️ <b>Стерилизация:</b> учет 15-минутного буфера\n"
-            f"• 💰 <b>Выручка:</b> расчет планового дохода\n\n"
+            f"• 💰 <b>Выручка:</b> расчет планового дохода\n"
+            f"• 👁️ <b>Предпросмотр:</b> команда /test для проверки от лица клиента\n\n"
             f"Нажмите кнопку ниже, чтобы открыть нужный раздел:"
         )
         keyboard = get_master_keyboard(WEBAPP_URL, MASTER_USERNAME)
@@ -194,6 +201,50 @@ async def command_settings_handler(message: Message):
         reply_markup=keyboard,
         parse_mode=ParseMode.HTML
     )
+
+
+# =====================================================================
+# КОМАНДА /test (Предпросмотр от лица клиента)
+# =====================================================================
+@router.message(Command("test"))
+async def command_test_handler(message: Message):
+    """
+    Команда /test для мастера:
+    Позволяет мастеру увидеть и протестировать интерфейс онлайн-записи
+    глазами обычного клиента.
+    """
+    user = message.from_user
+    user_id = user.id if user else 0
+    if not is_master_user(user_id):
+        await message.answer("Эта команда доступна только мастеру.")
+        return
+
+    first_name = user.first_name if user else "Мастер"
+    text = (
+        f"👁️ <b>Режим предпросмотра для мастера ({first_name}):</b>\n\n"
+        "Вы открываете приложение точно так же, как его видит клиент.\n"
+        "Можно протестировать выбор услуг, подсчет времени и буфера стерилизации, "
+        "выбор даты и создание записи.\n\n"
+        "Нажмите кнопку ниже:"
+    )
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="💅 Открыть как клиент (Тест)",
+                    web_app=WebAppInfo(url=f"{WEBAPP_URL}?role=client")
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="⚙️ Вернуться в Кабинет мастера",
+                    web_app=WebAppInfo(url=f"{WEBAPP_URL}?role=master")
+                )
+            ]
+        ]
+    )
+    await message.answer(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
 
 # =====================================================================

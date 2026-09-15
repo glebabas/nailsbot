@@ -16,6 +16,7 @@ import {
   getTelegramUser,
   getTelegramWebApp,
   triggerHaptic,
+  MASTER_TG_IDS,
 } from '../utils/telegram';
 
 export const ClientApp: React.FC = () => {
@@ -187,6 +188,25 @@ export const ClientApp: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-stone-900 flex flex-col font-sans selection:bg-rose-100 selection:text-rose-900">
+      {/* Баннер предпросмотра для мастера */}
+      {MASTER_TG_IDS.includes(tgUser.id) && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-xs text-amber-900 flex items-center justify-between sticky top-0 z-50 backdrop-blur-md">
+          <span className="flex items-center gap-1.5 font-medium">
+            👁️ Режим предпросмотра (глазами клиента)
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              triggerHaptic('light');
+              window.location.search = '?role=master';
+            }}
+            className="text-rose-700 hover:text-rose-900 font-semibold underline cursor-pointer"
+          >
+            В кабинет мастера →
+          </button>
+        </div>
+      )}
+
       {/* Шапка клиента со шкалой этапов */}
       <Header
         currentStep={currentStep}

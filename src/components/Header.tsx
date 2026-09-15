@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sparkles, MapPin, Star, UserCheck, ShieldCheck } from 'lucide-react';
 import { getTelegramUser } from '../utils/telegram';
+import { api } from '../services/api';
+import { StudioConfig } from '../types';
 
 interface HeaderProps {
   currentStep: number;
@@ -12,6 +14,11 @@ export const Header: React.FC<HeaderProps> = ({
   onStepClick,
 }) => {
   const tgUser = getTelegramUser();
+  const [studioConfig, setStudioConfig] = useState<StudioConfig | null>(null);
+
+  useEffect(() => {
+    api.getStudioConfig().then(setStudioConfig);
+  }, []);
 
   const steps = [
     { num: 1, label: 'Услуги' },
@@ -24,23 +31,27 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="bg-white/95 backdrop-blur-md border-b border-rose-100/70 sticky top-0 z-40">
       {/* Верхняя статусная плашка */}
       <div className="max-w-md mx-auto px-4 pt-3 pb-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-rose-400 to-rose-300 flex items-center justify-center text-white shadow-sm">
-            <Sparkles className="w-4 h-4" />
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-8 h-8 rounded-full overflow-hidden bg-rose-100 flex items-center justify-center text-rose-600 shadow-sm border border-rose-200 shrink-0">
+            {studioConfig?.avatar_url ? (
+              <img src={studioConfig.avatar_url} alt="Аватар" className="w-full h-full object-cover" />
+            ) : (
+              <Sparkles className="w-4 h-4 text-rose-500" />
+            )}
           </div>
-          <div>
-            <h1 className="text-sm font-semibold text-stone-900 leading-tight">
-              Екатерина Nails Studio
+          <div className="min-w-0">
+            <h1 className="text-sm font-semibold text-stone-900 leading-tight truncate">
+              {studioConfig?.studio_name || 'Студия маникюра'}
             </h1>
-            <div className="flex items-center gap-2 text-[11px] text-stone-500">
-              <span className="flex items-center gap-0.5 text-amber-600 font-medium">
+            <div className="flex items-center gap-2 text-[11px] text-stone-500 truncate">
+              <span className="flex items-center gap-0.5 text-amber-600 font-medium shrink-0">
                 <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-                4.98
+                5.0
               </span>
               <span>•</span>
-              <span className="flex items-center gap-0.5">
-                <MapPin className="w-2.5 h-2.5 text-rose-500" />
-                Арбат, 10
+              <span className="flex items-center gap-0.5 truncate">
+                <MapPin className="w-2.5 h-2.5 text-rose-500 shrink-0" />
+                <span className="truncate">{studioConfig?.studio_address || 'ул. Арбат, 10'}</span>
               </span>
             </div>
           </div>
