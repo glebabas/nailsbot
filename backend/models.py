@@ -217,7 +217,9 @@ class GlobalConfig(Base):
     reminder_first_hours_before: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
     reminder_second_hours_before: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
     
+    studio_name: Mapped[str] = mapped_column(String(255), default="Студия маникюра", nullable=False)
     studio_address: Mapped[str] = mapped_column(String(255), default="г. Москва, ул. Арбат, д. 10", nullable=False)
+    avatar_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     preparation_instructions: Mapped[str] = mapped_column(
         Text, 
         default="Не наносите масло и жирный крем для рук за 3 часа до визита. Приходите без опозданий.",

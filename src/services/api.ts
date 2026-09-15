@@ -14,7 +14,8 @@ import {
   MasterScheduleDay,
   ScheduleTemplateSettings,
   MasterMonthOverview,
-  MonthDaySchedule
+  MonthDaySchedule,
+  StudioConfig
 } from '../types';
 
 // Начальный каталог услуг на русском языке (полностью соответствует backend/database.py)
@@ -23,7 +24,7 @@ export const INITIAL_SERVICES: CategorizedServices = {
     {
       id: 1,
       category: 'removal',
-      name: 'Без снятия',
+      name: 'без снятия',
       description: 'Ногти чистые, снятие предыдущего материала не требуется',
       duration_minutes: 0,
       price: 0,
@@ -33,30 +34,30 @@ export const INITIAL_SERVICES: CategorizedServices = {
     {
       id: 2,
       category: 'removal',
-      name: 'Снятие гель-лака другого мастера',
-      description: 'Бережное аппаратное снятие покрытия фрезой без травмирования ногтевой пластины',
-      duration_minutes: 20,
-      price: 300,
+      name: 'снятие покрытия',
+      description: 'Бережное аппаратное снятие покрытия фрезой',
+      duration_minutes: 15,
+      price: 0,
       sort_order: 2,
       is_active: true,
     },
     {
       id: 3,
       category: 'removal',
-      name: 'Снятие нарощенных ногтей / акрила',
-      description: 'Полное бережное спиливание твердого искусственного материала',
-      duration_minutes: 35,
-      price: 600,
+      name: 'снятие наращенных ногтей',
+      description: 'Снятие наращенных ногтей',
+      duration_minutes: 20,
+      price: 0,
       sort_order: 3,
       is_active: true,
     },
     {
       id: 4,
       category: 'removal',
-      name: 'Снятие моей работы с покрытием',
-      description: 'Бесплатное снятие предыдущей работы нашего мастера',
-      duration_minutes: 15,
-      price: 0,
+      name: 'любое снятие + маникюр (без дальнейшего покрытия)',
+      description: 'Снятие любого покрытия и гигиенический маникюр',
+      duration_minutes: 60,
+      price: 900,
       sort_order: 4,
       is_active: true,
     },
@@ -65,41 +66,51 @@ export const INITIAL_SERVICES: CategorizedServices = {
     {
       id: 10,
       category: 'base',
-      name: 'Комбинированный маникюр + гель-лак',
-      description: 'Аппаратная + ножничная обработка кутикулы, идеальное выравнивание базой, цвет под кутикулу',
-      duration_minutes: 90,
-      price: 2200,
+      name: '-',
+      description: 'Без основного покрытия',
+      duration_minutes: 0,
+      price: 0,
       sort_order: 10,
       is_active: true,
     },
     {
       id: 11,
       category: 'base',
-      name: 'Маникюр с укреплением твердым гелем',
-      description: 'Укрепление тонких, слоящихся или клюющих ногтей полигелем/твердым гелем',
-      duration_minutes: 110,
-      price: 2700,
+      name: 'маникюр с покрытием на свои до 1 длины',
+      description: 'Маникюр с покрытием на свои ногти до 1 длины',
+      duration_minutes: 105,
+      price: 1900,
       sort_order: 11,
       is_active: true,
     },
     {
       id: 12,
       category: 'base',
-      name: 'Наращивание ногтей (длина 1–3)',
-      description: 'Моделирование архитектуры на нижние/верхние формы, выравнивание, цветное покрытие',
-      duration_minutes: 150,
-      price: 3800,
+      name: 'маникюр с наращиванием ногтей длина до 3',
+      description: 'Маникюр с наращиванием ногтей длина до 3',
+      duration_minutes: 140,
+      price: 2400,
       sort_order: 12,
       is_active: true,
     },
     {
       id: 13,
       category: 'base',
-      name: 'Гигиенический экспресс-маникюр',
-      description: 'Обработка кутикулы и боковых валиков, опил формы, масло или лечебное глянцевание (без цвета)',
-      duration_minutes: 45,
-      price: 1200,
+      name: 'маникюр с наращивание ногтей длина до 7',
+      description: 'Маникюр с наращиванием ногтей длина до 7',
+      duration_minutes: 160,
+      price: 2800,
       sort_order: 13,
+      is_active: true,
+    },
+    {
+      id: 14,
+      category: 'base',
+      name: 'маникюр с наращиванием ногтей длина до 10',
+      description: 'Маникюр с наращиванием ногтей длина до 10',
+      duration_minutes: 180,
+      price: 3400,
+      sort_order: 14,
       is_active: true,
     },
   ],
@@ -107,8 +118,8 @@ export const INITIAL_SERVICES: CategorizedServices = {
     {
       id: 20,
       category: 'design',
-      name: 'Без дизайна (чистый однотон)',
-      description: 'Классическое ровное покрытие одним или двумя оттенками',
+      name: 'без дизайна (чистый однотон)',
+      description: 'Классическое однотонное покрытие',
       duration_minutes: 0,
       price: 0,
       sort_order: 20,
@@ -117,31 +128,41 @@ export const INITIAL_SERVICES: CategorizedServices = {
     {
       id: 21,
       category: 'design',
-      name: 'Французский маникюр (Френч / Лунный)',
-      description: 'Идеальная контрастная или белая линия улыбки на всех 10 ногтях',
-      duration_minutes: 30,
-      price: 500,
+      name: 'френч любым цветом',
+      description: 'Френч любым цветом на всех ногтях',
+      duration_minutes: 25,
+      price: 0,
       sort_order: 21,
       is_active: true,
     },
     {
       id: 22,
       category: 'design',
-      name: 'Втирка / Градиент (Омбре)',
-      description: 'Жемчужный/зеркальный перелив или плавный переход двух оттенков',
-      duration_minutes: 25,
-      price: 450,
+      name: 'легкий дизайн (втирка/покрытие гель-лаком/кошачий глаз)',
+      description: 'Втирка, покрытие гель-лаком или кошачий глаз',
+      duration_minutes: 20,
+      price: 0,
       sort_order: 22,
       is_active: true,
     },
     {
       id: 23,
       category: 'design',
-      name: 'Сложный дизайн 4+ ногтей / Арт-роспись',
-      description: 'Геометрия, авторские рисунки от руки, стемпинг, инкрустация кристаллами',
+      name: 'средний дизайн (декоративные элементы/фигурки/бульонки/стразы/паутинка/градиент/минималистичная роспись/наклейки/слайдеры/френч с вышеперечисленным)',
+      description: 'Декоративные элементы, фигурки, бульонки, стразы, слайдеры, роспись',
       duration_minutes: 45,
-      price: 800,
+      price: 0,
       sort_order: 23,
+      is_active: true,
+    },
+    {
+      id: 24,
+      category: 'design',
+      name: 'сложный дизайн (аквариумный дизайн/авторская роспись/сочетание большого количества элементов и цветов/инкрустация кристаллами/геометрия)',
+      description: 'Аквариумный дизайн, сложная авторская роспись, инкрустация',
+      duration_minutes: 75,
+      price: 300,
+      sort_order: 24,
       is_active: true,
     },
   ],
@@ -150,7 +171,7 @@ export const INITIAL_SERVICES: CategorizedServices = {
       id: 30,
       category: 'repair',
       name: 'Ремонт трещины / донаращивание (1 ноготь)',
-      description: 'Ремонт трещины шелком, акригелем или поднятие клюющего угла',
+      description: 'Восстановление сломанного уголка или трещины',
       duration_minutes: 15,
       price: 150,
       sort_order: 30,
@@ -159,10 +180,10 @@ export const INITIAL_SERVICES: CategorizedServices = {
     {
       id: 31,
       category: 'repair',
-      name: 'Ремонт 2–3 ногтей',
-      description: 'Восстановление углов и ремонт сломанных ногтей перед покрытием',
-      duration_minutes: 25,
-      price: 350,
+      name: 'Донаращивание угла / длины (1 ноготь)',
+      description: 'Восстановление формы или донаращивание одного ногтя',
+      duration_minutes: 15,
+      price: 200,
       sort_order: 31,
       is_active: true,
     },
@@ -786,5 +807,108 @@ export const api = {
     const updated = getStoredAppointments().map(a => a.id === appointmentId ? { ...a, status } : a);
     localStorage.setItem(STORAGE_APPOINTMENTS_KEY, JSON.stringify(updated));
     return { success: true, newStatus: status };
+  },
+
+  getStudioConfig: async (): Promise<StudioConfig> => {
+    const url = buildApiUrl('/api/config');
+    try {
+      console.log('📡 [API Request] GET', url);
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        return data;
+      }
+    } catch (err) {
+      console.warn('⚠️ [API Error] Failed to fetch studio config:', err);
+    }
+    const local = localStorage.getItem('nail_studio_config');
+    if (local) {
+      try {
+        return JSON.parse(local);
+      } catch {}
+    }
+    return {
+      studio_name: 'Студия маникюра Екатерина',
+      studio_address: 'г. Москва, ул. Арбат, д. 10, кабинет 304',
+      avatar_url: null,
+      default_sterilization_buffer: 15,
+    };
+  },
+
+  updateStudioConfig: async (config: Partial<StudioConfig>): Promise<StudioConfig> => {
+    const url = buildApiUrl('/api/config');
+    try {
+      console.log('📡 [API Request] POST', url, config);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem('nail_studio_config', JSON.stringify(data));
+        return data;
+      }
+    } catch (err) {
+      console.warn('⚠️ [API Error] Failed to update studio config:', err);
+    }
+    const prev = await api.getStudioConfig();
+    const merged = { ...prev, ...config };
+    localStorage.setItem('nail_studio_config', JSON.stringify(merged));
+    return merged;
+  },
+
+  createService: async (service: Omit<Service, 'id'>): Promise<Service> => {
+    const url = buildApiUrl('/api/services');
+    try {
+      console.log('📡 [API Request] POST', url, service);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(service),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        return created;
+      }
+    } catch (err) {
+      console.warn('⚠️ [API Error] Failed to create service on backend:', err);
+    }
+    const newService: Service = {
+      ...service,
+      id: Date.now(),
+    };
+    return newService;
+  },
+
+  updateService: async (serviceId: number, update: Partial<Service>): Promise<Service> => {
+    const url = buildApiUrl(`/api/services/${serviceId}`);
+    try {
+      console.log('📡 [API Request] PUT', url, update);
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(update),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        return updated;
+      }
+    } catch (err) {
+      console.warn('⚠️ [API Error] Failed to update service on backend:', err);
+    }
+    return { id: serviceId, ...update } as Service;
+  },
+
+  deleteService: async (serviceId: number): Promise<boolean> => {
+    const url = buildApiUrl(`/api/services/${serviceId}`);
+    try {
+      console.log('📡 [API Request] DELETE', url);
+      const res = await fetch(url, { method: 'DELETE' });
+      return res.ok;
+    } catch (err) {
+      console.warn('⚠️ [API Error] Failed to delete service on backend:', err);
+      return true;
+    }
   },
 };

@@ -16,14 +16,16 @@ from sqlalchemy import func
 from backend.database import get_db
 from backend.models import (
     User, UserRole, Service, ServiceCategory,
-    MasterSchedule, Appointment, AppointmentStatus, appointment_services_table
+    MasterSchedule, Appointment, AppointmentStatus, appointment_services_table,
+    GlobalConfig
 )
 from backend.schemas import (
     CategorizedServicesResponse, ServiceResponse,
     SlotsRequest, SlotsResponse, CalculatedDurationDTO, AvailableSlotDTO,
     AppointmentCreateRequest, AppointmentResponse,
     MasterDayScheduleResponse, MasterMonthOverviewResponse, MasterMonthDaySummary,
-    ScheduleDaySetting, ScheduleTemplateApplyRequest, BulkScheduleSaveRequest, ScheduleBulkResponse
+    ScheduleDaySetting, ScheduleTemplateApplyRequest, BulkScheduleSaveRequest, ScheduleBulkResponse,
+    StudioConfigResponse, StudioConfigUpdateRequest, ServiceCreateRequest, ServiceUpdateRequest
 )
 from backend.scheduling_engine import (
     SmartSchedulingEngine, ServiceItem, minutes_to_str, time_to_minutes
@@ -795,3 +797,157 @@ def update_appointment_status(
 
     db.commit()
     return {"status": "ok", "appointment_id": app.id, "new_status": app.status}
+
+
+# =====================================================================
+# 8. НАСТРОЙКИ СТУДИИ (ПРОФИЛЬ, НАЗВАНИЕ, АДРЕС, АВАТАРКА)
+# =====================================================================
+@router.get(
+    "/config",
+    response_model=StudioConfigResponse,
+    summary="Получение настроек студии"
+)
+def get_studio_config(db: Session = Depends(get_db)):
+    """Возвращает настройки студии (название, адрес, аватарку)"""
+    config = db.query(GlobalConfig).first()
+    if not config:
+        config = GlobalConfig(
+            studio_name="Студия маникюра Екатерина",
+            studio_address="г. Москва, ул. Арбат, д. 10, кабинет 304",
+        )
+        db.add(config)
+        db.commit()
+        db.refresh(config)
+    return config
+
+
+@router.post(
+    "/config",
+    response_model=StudioConfigResponse,
+    summary="Обновление настроек студии (профиль мастера)"
+)
+def update_studio_config(payload: StudioConfigUpdateRequest, db: Session = Depends(get_db)):
+    """Обновляет название студии, адрес, аватарку или инструкции"""
+    config = db.query(GlobalConfig).first()
+    if not config:
+        config = GlobalConfig()
+        db.add(config)
+
+    if payload.studio_name is not None:
+        config.studio_name = payload.studio_name
+    if payload.studio_address is not None:
+        config.studio_address = payload.studio_address
+    if payload.avatar_url is not None:
+        config.avatar_url = payload.avatar_url
+    if payload.preparation_instructions is not None:
+        config.preparation_instructions = payload.preparation_instructions
+    if payload.default_sterilization_buffer is not None:
+        config.default_sterilization_buffer = payload.default_sterilization_buffer
+
+    db.commit()
+    db.refresh(config)
+    return config
+
+
+# =====================================================================
+# 9. УПРАВЛЕНИЕ УСЛУГАМИ (CRUD)
+# =====================================================================
+@router.post(
+    "/services",
+    response_model=ServiceResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Добавление новой услуги"
+)
+def create_service(payload: ServiceCreateRequest, db: Session = Depends(get_db)):
+    """Создает новую услугу в выбранной категории"""
+    # Определяем порядок сортировки, если не задан
+    if payload.sort_order is None or payload.sort_order == 0:
+        max_order = (
+            db.query(func.max(Service.sort_order))
+            .filter(Service.category == payload.category)
+            .scalar()
+            or 0
+        )
+        sort_order = max_order + 1
+    else:
+        sort_order = payload.sort_order
+
+    new_service = Service(
+        category=payload.category,
+        name=payload.name,
+        description=payload.description or "",
+        duration_minutes=payload.duration_minutes,
+        price=payload.price,
+        sort_order=sort_order,
+        is_active=payload.is_active if payload.is_active is not None else True,
+    )
+    db.add(new_service)
+    db.commit()
+    db.refresh(new_service)
+    return new_service
+
+
+@router.put(
+    "/services/{service_id}",
+    response_model=ServiceResponse,
+    summary="Редактирование существующей услуги"
+)
+def update_service(service_id: int, payload: ServiceUpdateRequest, db: Session = Depends(get_db)):
+    """Обновляет параметры услуги (название, цену, длительность, категорию, активность)"""
+    srv = db.query(Service).filter(Service.id == service_id).first()
+    if not srv:
+        raise HTTPException(status_code=404, detail="Услуга не найдена")
+
+    if payload.name is not None:
+        srv.name = payload.name
+    if payload.category is not None:
+        srv.category = payload.category
+    if payload.description is not None:
+        srv.description = payload.description
+    if payload.duration_minutes is not None:
+        srv.duration_minutes = payload.duration_minutes
+    if payload.price is not None:
+        srv.price = payload.price
+    if payload.sort_order is not None:
+        srv.sort_order = payload.sort_order
+    if payload.is_active is not None:
+        srv.is_active = payload.is_active
+
+    db.commit()
+    db.refresh(srv)
+    return srv
+
+
+@router.delete(
+    "/services/{service_id}",
+    summary="Удаление или деактивация услуги"
+)
+def delete_service(service_id: int, hard: bool = False, db: Session = Depends(get_db)):
+    """
+    По умолчанию деактивирует услугу (is_active = False), чтобы не ломать старые записи.
+    Если hard=True — полностью удаляет услугу из БД.
+    """
+    srv = db.query(Service).filter(Service.id == service_id).first()
+    if not srv:
+        raise HTTPException(status_code=404, detail="Услуга не найдена")
+
+    if hard:
+        # Проверяем, есть ли привязки к записям
+        has_apps = db.execute(
+            appointment_services_table.select().where(
+                appointment_services_table.c.service_id == service_id
+            )
+        ).first()
+        if has_apps:
+            # Нельзя удалить жестко — деактивируем
+            srv.is_active = False
+            db.commit()
+            return {"status": "deactivated", "message": "Услуга привязана к записям и была деактивирована"}
+        db.delete(srv)
+        db.commit()
+        return {"status": "deleted", "message": "Услуга успешно удалена"}
+    else:
+        srv.is_active = False
+        db.commit()
+        return {"status": "deactivated", "message": "Услуга деактивирована"}
+

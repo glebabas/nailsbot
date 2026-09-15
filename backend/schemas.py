@@ -193,3 +193,46 @@ class MasterMonthOverviewResponse(BaseModel):
     total_appointments: int
     total_revenue: float
 
+
+# ==========================================
+# 5. НАСТРОЙКИ СТУДИИ И CRUD УСЛУГ
+# ==========================================
+class StudioConfigResponse(BaseModel):
+    studio_name: str
+    studio_address: str
+    avatar_url: Optional[str] = None
+    preparation_instructions: Optional[str] = None
+    default_sterilization_buffer: int = 15
+
+    class Config:
+        from_attributes = True
+
+
+class StudioConfigUpdateRequest(BaseModel):
+    studio_name: Optional[str] = None
+    studio_address: Optional[str] = None
+    avatar_url: Optional[str] = None
+    preparation_instructions: Optional[str] = None
+    default_sterilization_buffer: Optional[int] = None
+
+
+class ServiceCreateRequest(BaseModel):
+    category: ServiceCategory
+    name: str
+    description: Optional[str] = ""
+    duration_minutes: int
+    price: float
+    sort_order: Optional[int] = 0
+    is_active: Optional[bool] = True
+
+
+class ServiceUpdateRequest(BaseModel):
+    category: Optional[ServiceCategory] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    price: Optional[float] = None
+    sort_order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+

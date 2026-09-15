@@ -126,3 +126,12 @@ export interface MasterMonthOverview {
   total_revenue: number;
 }
 
+export interface StudioConfig {
+  studio_name: string;
+  studio_address: string;
+  avatar_url?: string | null;
+  preparation_instructions?: string;
+  default_sterilization_buffer?: number;
+}
+
+

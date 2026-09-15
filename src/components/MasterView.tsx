@@ -17,14 +17,17 @@ import {
   CalendarDays,
   ListTodo,
 } from 'lucide-react';
-import { Appointment } from '../types';
+import { Appointment, StudioConfig } from '../types';
 import { api, getStoredAppointments } from '../services/api';
 import { triggerHaptic, getTelegramUser } from '../utils/telegram';
 import { ScheduleSetup } from './ScheduleSetup';
+import { MasterSettings } from './MasterSettings';
+import { Settings } from 'lucide-react';
 
 export const MasterView: React.FC = () => {
   const tgUser = getTelegramUser();
-  const [activeTab, setActiveTab] = useState<'appointments' | 'schedule'>('appointments');
+  const [activeTab, setActiveTab] = useState<'appointments' | 'schedule' | 'settings'>('appointments');
+  const [studioConfig, setStudioConfig] = useState<StudioConfig | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split('T')[0]
@@ -38,6 +41,7 @@ export const MasterView: React.FC = () => {
 
   useEffect(() => {
     refreshAppointments();
+    api.getStudioConfig().then(setStudioConfig);
   }, [selectedDate]);
 
   const filteredAppointments = appointments.filter((a) => a.date === selectedDate);
@@ -72,25 +76,31 @@ export const MasterView: React.FC = () => {
       {/* Шапка мастера */}
       <div className="bg-white p-4 rounded-2xl border border-stone-200/80 shadow-xs flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-700 font-bold flex items-center justify-center text-sm border border-rose-200">
-            EN
+          <div className="w-11 h-11 rounded-full overflow-hidden bg-rose-100 text-rose-700 font-bold flex items-center justify-center text-sm border border-rose-200 shrink-0 shadow-xs">
+            {studioConfig?.avatar_url ? (
+              <img src={studioConfig.avatar_url} alt="Аватарка" className="w-full h-full object-cover" />
+            ) : (
+              <span>{studioConfig?.studio_name ? studioConfig.studio_name.charAt(0).toUpperCase() : '💅'}</span>
+            )}
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <h2 className="text-sm font-bold text-stone-900">Кабинет мастера</h2>
-              <span className="bg-rose-100 text-rose-800 text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                Админ
+              <h2 className="text-sm font-bold text-stone-900 truncate">
+                {studioConfig?.studio_name || 'Кабинет мастера'}
+              </h2>
+              <span className="bg-rose-100 text-rose-800 text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0">
+                Мастер
               </span>
             </div>
-            <p className="text-[11px] text-stone-500">
-              {tgUser.firstName ? `${tgUser.firstName} • ` : ''}Стерилизация, референсы и график
+            <p className="text-[11px] text-stone-500 truncate">
+              {studioConfig?.studio_address || (tgUser.firstName ? `${tgUser.firstName} • Студия` : 'Стерилизация, референсы и график')}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Вкладки: Записи на день / Настройка графика */}
-      <div className="bg-stone-100/90 p-1 rounded-2xl flex border border-stone-200/60 shadow-2xs">
+      {/* Вкладки: Записи / График / Настройки */}
+      <div className="bg-stone-100/90 p-1 rounded-2xl flex border border-stone-200/60 shadow-2xs gap-1">
         <button
           id="master-tab-appointments"
           type="button"
@@ -98,14 +108,14 @@ export const MasterView: React.FC = () => {
             triggerHaptic('light');
             setActiveTab('appointments');
           }}
-          className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+          className={`flex-1 py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
             activeTab === 'appointments'
               ? 'bg-white text-stone-900 shadow-xs'
               : 'text-stone-500 hover:text-stone-800'
           }`}
         >
           <ListTodo className="w-3.5 h-3.5 text-rose-500" />
-          <span>Записи на день</span>
+          <span>Записи</span>
         </button>
 
         <button
@@ -115,19 +125,38 @@ export const MasterView: React.FC = () => {
             triggerHaptic('light');
             setActiveTab('schedule');
           }}
-          className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+          className={`flex-1 py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
             activeTab === 'schedule'
               ? 'bg-white text-stone-900 shadow-xs'
               : 'text-stone-500 hover:text-stone-800'
           }`}
         >
           <CalendarDays className="w-3.5 h-3.5 text-rose-500" />
-          <span>Настройка графика</span>
+          <span>График</span>
+        </button>
+
+        <button
+          id="master-tab-settings"
+          type="button"
+          onClick={() => {
+            triggerHaptic('light');
+            setActiveTab('settings');
+          }}
+          className={`flex-1 py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+            activeTab === 'settings'
+              ? 'bg-white text-stone-900 shadow-xs'
+              : 'text-stone-500 hover:text-stone-800'
+          }`}
+        >
+          <Settings className="w-3.5 h-3.5 text-rose-500" />
+          <span>Настройки</span>
         </button>
       </div>
 
       {/* Контент активной вкладки */}
-      {activeTab === 'schedule' ? (
+      {activeTab === 'settings' ? (
+        <MasterSettings onConfigUpdated={(conf) => setStudioConfig(conf)} />
+      ) : activeTab === 'schedule' ? (
         <ScheduleSetup
           masterId={1}
           onScheduleUpdated={refreshAppointments}

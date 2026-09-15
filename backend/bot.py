@@ -84,18 +84,12 @@ def get_client_keyboard(webapp_url: str, master_username: str) -> InlineKeyboard
 
 
 def get_master_keyboard(webapp_url: str, master_username: str) -> InlineKeyboardMarkup:
-    """Клавиатура для мастера: Mini App клиента + выделенный Кабинет Мастера"""
+    """Клавиатура для мастера: выделенный Кабинет Мастера"""
     buttons = [
         [
             InlineKeyboardButton(
                 text="⚙️ Кабинет мастера (Mini App)",
                 web_app=WebAppInfo(url=f"{webapp_url}?role=master")
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="💅 Открыть вид клиента",
-                web_app=WebAppInfo(url=f"{webapp_url}?role=client")
             )
         ],
         [

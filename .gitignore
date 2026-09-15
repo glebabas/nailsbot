@@ -7,3 +7,7 @@ coverage/
 .env*
 !.env.example
 .vscode/
+__pycache__/
+*.py[cod]
+*$py.class
+nail_bot.db*
