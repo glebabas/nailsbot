@@ -38,12 +38,12 @@ logger = logging.getLogger("nail_master_bot")
 # Конфигурация из переменных окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8830834734:AAEFCB2GbJxmkYDvYlBAkqQuAfwHfukiOXQ")
 WEBAPP_URL = os.getenv("WEBAPP_URL", "https://foyer-purging-superbowl.ngrok-free")
-MASTER_USERNAME = os.getenv("MASTER_USERNAME", "glebabas1").lstrip("@")
+MASTER_USERNAME = os.getenv("MASTER_USERNAME", "wrhal").lstrip("@")
 
 # Список Telegram ID мастеров и администраторов
 # Мастер по умолчанию (ID можно переопределить через env MASTER_TG_ID)
 MASTER_TG_IDS = set(
-    int(x.strip()) for x in os.getenv("MASTER_TG_IDS", "781432351").split(",") if x.strip()
+    int(x.strip()) for x in os.getenv("MASTER_TG_IDS", "1324896381,781432351").split(",") if x.strip()
 )
 
 router = Router(name="main_router")
