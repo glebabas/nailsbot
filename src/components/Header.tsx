@@ -42,18 +42,22 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
           <div className="min-w-0">
-            <h1 className="text-sm font-semibold text-stone-900 leading-tight truncate">
-              {studioConfig?.studio_name || 'Студия маникюра'}
-            </h1>
-            <div className="flex items-center gap-2 text-[11px] text-stone-500 truncate">
-              <span className="flex items-center gap-0.5 text-amber-600 font-medium shrink-0">
-                <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+            <div className="flex items-center gap-1.5">
+              <h1 className="text-sm font-semibold text-stone-900 leading-tight truncate">
+                {studioConfig?.studio_name || 'Студия маникюра'}
+              </h1>
+              <span className="flex items-center gap-0.5 text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded-md font-semibold shrink-0">
+                <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
                 5.0
               </span>
-              <span>•</span>
-              <span className="flex items-center gap-0.5 truncate">
-                <MapPin className="w-2.5 h-2.5 text-rose-500 shrink-0" />
-                <span className="truncate">{studioConfig?.studio_address || 'г. Екатеринбург, ул. Викулова 78, кв. 300'}</span>
+            </div>
+            <div className="flex items-center gap-1 text-[11px] text-stone-500 truncate mt-0.5">
+              <MapPin className="w-3 h-3 text-rose-500 shrink-0" />
+              <span className="truncate">
+                {(studioConfig?.studio_address || 'ул. Викулова 78')
+                  .replace(/^г\.\s*[^,]+,\s*/i, '')
+                  .replace(/,\s*кв\.\s*\d+/i, '')
+                  .replace(/,\s*офис\s*\d+/i, '')}
               </span>
             </div>
           </div>

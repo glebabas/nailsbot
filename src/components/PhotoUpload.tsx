@@ -127,28 +127,7 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
     }
   };
 
-  // Демо-шаблоны фотографий для быстрого тестирования в браузере
-  const sampleCurrentPhotos = [
-    {
-      label: 'Старое покрытие',
-      url: 'https://images.unsplash.com/photo-1632345031435-8727f6897d53?w=500&auto=format&fit=crop&q=60',
-    },
-    {
-      label: 'Натуральные ногти',
-      url: 'https://images.unsplash.com/photo-1519014816548-bf5fe059798b?w=500&auto=format&fit=crop&q=60',
-    },
-  ];
 
-  const sampleRefDesigns = [
-    {
-      label: 'Идеальный френч',
-      url: 'https://images.unsplash.com/photo-1604654894610-df63bc536371?w=500&auto=format&fit=crop&q=60',
-    },
-    {
-      label: 'Нюд + блестки',
-      url: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=500&auto=format&fit=crop&q=60',
-    },
-  ];
 
   return (
     <div className="pb-32 max-w-md mx-auto px-4 pt-3 space-y-6">
@@ -249,26 +228,6 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
                 </p>
               </div>
             </div>
-
-            {/* Быстрые примеры для демо */}
-            <div className="flex items-center gap-2 pt-0.5">
-              <span className="text-[10px] text-stone-400 shrink-0">Или выберите тест:</span>
-              <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-                {sampleCurrentPhotos.map((s, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => {
-                      triggerHaptic('light');
-                      setPhotoCurrent(s.url);
-                    }}
-                    className="text-[10px] px-2 py-1 rounded-lg bg-stone-100 text-stone-600 hover:bg-rose-100 hover:text-rose-700 transition-colors border border-stone-200/60 whitespace-nowrap cursor-pointer"
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
         )}
       </section>
@@ -338,28 +297,8 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
                   {isCompressingRef ? 'Оптимизация и сжатие фото...' : 'Прикрепите скриншот дизайна'}
                 </p>
                 <p className="text-[11px] text-stone-400 mt-0.5">
-                  {isCompressingRef ? 'Уменьшаем размер перед отправкой' : 'Из Pinterest, Instagram или Telegram'}
+                  {isCompressingRef ? 'Уменьшаем размер перед отправкой' : 'Из Pinterest, Instagram или галереи'}
                 </p>
-              </div>
-            </div>
-
-            {/* Быстрые примеры для демо */}
-            <div className="flex items-center gap-2 pt-0.5">
-              <span className="text-[10px] text-stone-400 shrink-0">Или выберите арт:</span>
-              <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-                {sampleRefDesigns.map((s, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => {
-                      triggerHaptic('light');
-                      setPhotoRef(s.url);
-                    }}
-                    className="text-[10px] px-2 py-1 rounded-lg bg-stone-100 text-stone-600 hover:bg-rose-100 hover:text-rose-700 transition-colors border border-stone-200/60 whitespace-nowrap cursor-pointer"
-                  >
-                    {s.label}
-                  </button>
-                ))}
               </div>
             </div>
           </div>

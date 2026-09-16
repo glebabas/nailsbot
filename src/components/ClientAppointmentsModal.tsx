@@ -87,31 +87,31 @@ export const ClientAppointmentsModal: React.FC<ClientAppointmentsModalProps> = (
     switch (status) {
       case 'CONFIRMED':
         return (
-          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
             ✅ Подтверждена
           </span>
         );
       case 'PENDING':
         return (
-          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-            ⏳ Ожидает подтверждения
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+            ⏳ Ожидает
           </span>
         );
       case 'COMPLETED':
         return (
-          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-700 border border-stone-200">
             🏁 Завершена
           </span>
         );
       case 'CANCELLED':
         return (
-          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/20 text-rose-400 border border-rose-500/30">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
             ❌ Отменена
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-700 text-slate-300">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600">
             {status}
           </span>
         );
@@ -119,21 +119,21 @@ export const ClientAppointmentsModal: React.FC<ClientAppointmentsModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/75 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-lg bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden text-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-stone-900/60 backdrop-blur-xs animate-fade-in">
+      <div className="relative w-full max-w-md bg-[#FAF8F5] border border-stone-200 rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden text-stone-900">
         
         {/* Хедер модального окна */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 bg-slate-900/90 sticky top-0 z-10">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200/80 bg-white sticky top-0 z-10">
           <div className="flex items-center space-x-2.5">
             <span className="text-2xl">📅</span>
             <div>
-              <h2 className="text-lg font-bold text-white leading-tight">Мои записи</h2>
-              <p className="text-xs text-slate-400">История и актуальные бронирования</p>
+              <h2 className="text-base font-bold text-stone-900 leading-tight">Мои записи</h2>
+              <p className="text-[11px] text-stone-500">История и актуальные бронирования</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-stone-100 hover:bg-stone-200 text-stone-500 hover:text-stone-800 transition-colors cursor-pointer"
             title="Закрыть"
           >
             ✕
@@ -141,33 +141,37 @@ export const ClientAppointmentsModal: React.FC<ClientAppointmentsModalProps> = (
         </div>
 
         {/* Переключатель вкладок */}
-        <div className="flex px-4 pt-3 pb-2 bg-slate-900 border-b border-slate-800/60 space-x-2">
+        <div className="flex px-4 pt-3 pb-2 bg-[#FAF8F5] border-b border-stone-200/60 space-x-2">
           <button
             onClick={() => setActiveTab('upcoming')}
-            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all flex items-center justify-center space-x-2 ${
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold transition-all flex items-center justify-center space-x-2 cursor-pointer ${
               activeTab === 'upcoming'
-                ? 'bg-rose-500 text-white shadow-md shadow-rose-500/25'
-                : 'bg-slate-800/70 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                ? 'bg-rose-500 text-white shadow-xs'
+                : 'bg-white text-stone-600 border border-stone-200/80 hover:bg-stone-50'
             }`}
           >
             <span>Предстоящие</span>
             {upcoming.length > 0 && (
-              <span className="bg-white/20 px-1.5 py-0.5 rounded-full text-[10px] font-bold">
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                activeTab === 'upcoming' ? 'bg-white/25 text-white' : 'bg-rose-100 text-rose-700'
+              }`}>
                 {upcoming.length}
               </span>
             )}
           </button>
           <button
             onClick={() => setActiveTab('history')}
-            className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all flex items-center justify-center space-x-2 ${
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold transition-all flex items-center justify-center space-x-2 cursor-pointer ${
               activeTab === 'history'
-                ? 'bg-rose-500 text-white shadow-md shadow-rose-500/25'
-                : 'bg-slate-800/70 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                ? 'bg-rose-500 text-white shadow-xs'
+                : 'bg-white text-stone-600 border border-stone-200/80 hover:bg-stone-50'
             }`}
           >
             <span>История</span>
             {history.length > 0 && (
-              <span className="bg-white/20 px-1.5 py-0.5 rounded-full text-[10px] font-bold">
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                activeTab === 'history' ? 'bg-white/25 text-white' : 'bg-stone-100 text-stone-600'
+              }`}>
                 {history.length}
               </span>
             )}
@@ -183,7 +187,7 @@ export const ClientAppointmentsModal: React.FC<ClientAppointmentsModalProps> = (
           )}
 
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-16 text-slate-400 space-y-3">
+            <div className="flex flex-col items-center justify-center py-16 text-stone-400 space-y-3">
               <div className="w-8 h-8 border-2 border-rose-500 border-t-transparent rounded-full animate-spin"></div>
               <p className="text-xs">Загружаем ваши записи...</p>
             </div>
@@ -193,12 +197,12 @@ export const ClientAppointmentsModal: React.FC<ClientAppointmentsModalProps> = (
                 <>
                   {upcoming.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-12 px-4 text-center space-y-4">
-                      <div className="w-16 h-16 rounded-full bg-slate-800/80 flex items-center justify-center text-3xl">
+                      <div className="w-16 h-16 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center text-3xl">
                         💅
                       </div>
                       <div className="space-y-1">
-                        <h3 className="text-base font-semibold text-white">У вас нет активных записей</h3>
-                        <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
+                        <h3 className="text-sm font-bold text-stone-900">У вас нет активных записей</h3>
+                        <p className="text-xs text-stone-500 max-w-xs leading-relaxed">
                           Выберите удобный день и соберите образ ногтей в нашем умном конструкторе!
                         </p>
                       </div>
@@ -207,7 +211,7 @@ export const ClientAppointmentsModal: React.FC<ClientAppointmentsModalProps> = (
                           onClose();
                           onBookNew();
                         }}
-                        className="px-5 py-3 rounded-xl bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white font-semibold text-sm shadow-lg shadow-rose-500/20 transition-all"
+                        className="px-5 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-semibold text-xs shadow-xs transition-all cursor-pointer"
                       >
                         💅 Записаться на процедуру
                       </button>
@@ -216,14 +220,14 @@ export const ClientAppointmentsModal: React.FC<ClientAppointmentsModalProps> = (
                     upcoming.map((app) => (
                       <div
                         key={app.id}
-                        className="bg-slate-800/60 border border-slate-700/60 hover:border-slate-600 rounded-xl p-4 transition-all space-y-3"
+                        className="bg-white border border-stone-200/90 rounded-2xl p-4 transition-all space-y-3 shadow-xs"
                       >
                         <div className="flex items-start justify-between">
                           <div>
-                            <div className="text-sm font-bold text-white capitalize">
+                            <div className="text-sm font-bold text-stone-900 capitalize">
                               {formatRuDate(app.date)}
                             </div>
-                            <div className="text-xs text-rose-400 font-semibold mt-0.5">
+                            <div className="text-xs text-rose-600 font-bold mt-0.5">
                               ⏰ {app.start_time} — {app.end_time}
                             </div>
                           </div>
@@ -231,15 +235,15 @@ export const ClientAppointmentsModal: React.FC<ClientAppointmentsModalProps> = (
                         </div>
 
                         {/* Услуги */}
-                        <div className="bg-slate-900/60 rounded-lg p-2.5 border border-slate-800/60 text-xs text-slate-300 space-y-1">
-                          <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                        <div className="bg-stone-50 rounded-xl p-2.5 border border-stone-100 text-xs text-stone-700 space-y-1">
+                          <div className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">
                             Выбранные услуги:
                           </div>
                           <div className="space-y-0.5">
                             {app.services && app.services.length > 0 ? (
                               app.services.map((srv, idx) => (
                                 <div key={idx} className="flex items-center space-x-1.5">
-                                  <span className="text-rose-400">•</span>
+                                  <span className="text-rose-500">•</span>
                                   <span>{srv}</span>
                                 </div>
                               ))
@@ -250,30 +254,30 @@ export const ClientAppointmentsModal: React.FC<ClientAppointmentsModalProps> = (
                         </div>
 
                         {/* Финансы и адрес */}
-                        <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-700/40">
+                        <div className="flex items-center justify-between text-xs pt-1 border-t border-stone-100">
                           <div>
-                            <span className="text-slate-400">Стоимость: </span>
-                            <span className="font-bold text-white text-sm">
+                            <span className="text-stone-400">Стоимость: </span>
+                            <span className="font-bold text-stone-900 text-sm">
                               {app.total_price.toLocaleString('ru-RU')} ₽
                             </span>
                           </div>
-                          <div className="text-[11px] text-slate-400 text-right max-w-[55%] truncate" title={app.studio_address}>
-                            📍 {app.studio_address}
+                          <div className="text-[11px] text-stone-500 text-right max-w-[55%] truncate" title={app.studio_address}>
+                            📍 {app.studio_address.replace(/^г\.\s*[^,]+,\s*/i, '')}
                           </div>
                         </div>
 
                         {/* Кнопка отмены */}
                         {app.can_cancel && (
-                          <div className="pt-2">
+                          <div className="pt-1">
                             {cancellingId === app.id ? (
-                              <div className="bg-slate-900 border border-rose-500/30 rounded-lg p-3 space-y-2.5 animate-fade-in">
-                                <div className="text-xs font-semibold text-rose-300">
+                              <div className="bg-rose-50/70 border border-rose-200 rounded-xl p-3 space-y-2.5 animate-fade-in">
+                                <div className="text-xs font-semibold text-rose-900">
                                   Вы уверены, что хотите отменить запись?
                                 </div>
                                 <select
                                   value={cancelReason}
                                   onChange={(e) => setCancelReason(e.target.value)}
-                                  className="w-full text-xs bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 outline-none focus:border-rose-500"
+                                  className="w-full text-xs bg-white border border-rose-200 rounded-lg p-2 text-stone-900 outline-none focus:border-rose-400"
                                 >
                                   <option value="Изменились планы">Изменились планы</option>
                                   <option value="Заболела / плохо себя чувствую">Заболела / плохо себя чувствую</option>
@@ -284,13 +288,13 @@ export const ClientAppointmentsModal: React.FC<ClientAppointmentsModalProps> = (
                                   <button
                                     onClick={() => handleConfirmCancel(app.id)}
                                     disabled={isCancelling}
-                                    className="flex-1 py-1.5 px-3 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold disabled:opacity-50"
+                                    className="flex-1 py-1.5 px-3 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold disabled:opacity-50 cursor-pointer"
                                   >
                                     {isCancelling ? 'Отменяем...' : 'Да, отменить'}
                                   </button>
                                   <button
                                     onClick={() => setCancellingId(null)}
-                                    className="py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium"
+                                    className="py-1.5 px-3 rounded-lg bg-white hover:bg-stone-100 text-stone-700 border border-stone-200 text-xs font-medium cursor-pointer"
                                   >
                                     Назад
                                   </button>
@@ -299,7 +303,7 @@ export const ClientAppointmentsModal: React.FC<ClientAppointmentsModalProps> = (
                             ) : (
                               <button
                                 onClick={() => setCancellingId(app.id)}
-                                className="w-full py-2 px-3 rounded-lg border border-slate-700 hover:border-rose-500/50 text-slate-400 hover:text-rose-300 text-xs font-medium transition-colors text-center"
+                                className="w-full py-1.5 px-3 rounded-xl border border-stone-200 hover:border-rose-300 text-stone-500 hover:text-rose-600 text-xs font-medium transition-colors text-center cursor-pointer"
                               >
                                 Отменить эту запись
                               </button>
@@ -315,34 +319,34 @@ export const ClientAppointmentsModal: React.FC<ClientAppointmentsModalProps> = (
               {activeTab === 'history' && (
                 <>
                   {history.length === 0 ? (
-                    <div className="py-12 text-center text-slate-400 text-xs">
+                    <div className="py-12 text-center text-stone-400 text-xs">
                       История прошлых визитов пуста
                     </div>
                   ) : (
                     history.map((app) => (
                       <div
                         key={app.id}
-                        className="bg-slate-800/40 border border-slate-800 rounded-xl p-3.5 space-y-2 opacity-90"
+                        className="bg-white border border-stone-200/90 rounded-2xl p-3.5 space-y-2.5 shadow-2xs"
                       >
                         <div className="flex items-start justify-between">
                           <div>
-                            <div className="text-xs font-semibold text-slate-300 capitalize">
+                            <div className="text-xs font-bold text-stone-800 capitalize">
                               {formatRuDate(app.date)} в {app.start_time}
                             </div>
-                            <div className="text-[11px] text-slate-400">
+                            <div className="text-[11px] text-stone-500 mt-0.5">
                               {app.services && app.services.join(', ')}
                             </div>
                           </div>
                           <div>{getStatusBadge(app.status)}</div>
                         </div>
-                        <div className="flex items-center justify-between text-xs text-slate-400 pt-1 border-t border-slate-800/80">
-                          <span>Сумма: {app.total_price.toLocaleString('ru-RU')} ₽</span>
+                        <div className="flex items-center justify-between text-xs text-stone-600 pt-1.5 border-t border-stone-100">
+                          <span className="font-semibold">{app.total_price.toLocaleString('ru-RU')} ₽</span>
                           <button
                             onClick={() => {
                               onClose();
                               onBookNew();
                             }}
-                            className="text-xs text-rose-400 hover:text-rose-300 font-semibold"
+                            className="text-xs text-rose-600 hover:text-rose-700 font-semibold cursor-pointer"
                           >
                             Повторить запись →
                           </button>
@@ -357,10 +361,10 @@ export const ClientAppointmentsModal: React.FC<ClientAppointmentsModalProps> = (
         </div>
 
         {/* Подвал */}
-        <div className="px-5 py-3 border-t border-slate-800 bg-slate-900/90 flex justify-between items-center text-xs">
+        <div className="px-5 py-3 border-t border-stone-200 bg-white flex justify-between items-center text-xs">
           <button
             onClick={loadAppointments}
-            className="text-slate-400 hover:text-white transition-colors flex items-center space-x-1"
+            className="text-stone-500 hover:text-stone-800 transition-colors flex items-center space-x-1 cursor-pointer font-medium"
           >
             <span>🔄</span>
             <span>Обновить</span>
@@ -370,7 +374,7 @@ export const ClientAppointmentsModal: React.FC<ClientAppointmentsModalProps> = (
               onClose();
               onBookNew();
             }}
-            className="px-3.5 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white font-semibold transition-colors"
+            className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-semibold shadow-xs transition-colors cursor-pointer"
           >
             💅 Новая запись
           </button>

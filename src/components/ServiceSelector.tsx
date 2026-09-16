@@ -81,17 +81,17 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
       </div>
 
       {/* 1. ЭТАП: СНЯТИЕ */}
-      <section className="space-y-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-700 text-xs font-semibold flex items-center justify-center">
+      <section className="space-y-2">
+        <div className="flex items-start justify-between">
+          <div className="flex items-start gap-2">
+            <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-700 text-xs font-semibold flex items-center justify-center shrink-0 mt-0.5">
               1
             </span>
-            <h3 className="text-sm font-semibold text-stone-900">
+            <h3 className="text-sm font-semibold text-stone-900 leading-tight">
               Снятие старого материала
             </h3>
           </div>
-          <span className="text-[11px] font-medium text-rose-600">Обязательно</span>
+          <span className="text-[10px] font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100 shrink-0">Обязательно</span>
         </div>
 
         <div className="grid grid-cols-1 gap-2">
@@ -111,18 +111,18 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
                     : 'border-stone-200/80 bg-white hover:border-stone-300'
                 }`}
               >
-                <div className="space-y-1 pr-2">
+                <div className="space-y-0.5 pr-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-stone-900">
+                    <span className="text-xs font-semibold text-stone-900 leading-snug">
                       {service.name}
                     </span>
                   </div>
                   {service.description && (
-                    <p className="text-[11px] text-stone-500 leading-normal">
+                    <p className="text-[11px] text-stone-500 leading-snug">
                       {service.description}
                     </p>
                   )}
-                  <div className="flex items-center gap-3 pt-1">
+                  <div className="flex items-center gap-3 pt-0.5">
                     <span className="flex items-center gap-1 text-[11px] text-stone-500">
                       <Clock className="w-3 h-3 text-stone-400" />
                       {service.duration_minutes > 0 ? `${service.duration_minutes} мин` : '0 мин'}
@@ -149,17 +149,17 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
       </section>
 
       {/* 2. ЭТАП: БАЗА / МАНИКЮР */}
-      <section className="space-y-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-700 text-xs font-semibold flex items-center justify-center">
+      <section className="space-y-2">
+        <div className="flex items-start justify-between">
+          <div className="flex items-start gap-2">
+            <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-700 text-xs font-semibold flex items-center justify-center shrink-0 mt-0.5">
               2
             </span>
-            <h3 className="text-sm font-semibold text-stone-900">
+            <h3 className="text-sm font-semibold text-stone-900 leading-tight">
               Основное покрытие и маникюр
             </h3>
           </div>
-          <span className="text-[11px] font-medium text-rose-600">Обязательно</span>
+          <span className="text-[10px] font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100 shrink-0">Обязательно</span>
         </div>
 
         <div className="grid grid-cols-1 gap-2">
@@ -179,16 +179,16 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
                     : 'border-stone-200/80 bg-white hover:border-stone-300'
                 }`}
               >
-                <div className="space-y-1 pr-2">
-                  <span className="text-xs font-semibold text-stone-900">
+                <div className="space-y-0.5 pr-2">
+                  <span className="text-xs font-semibold text-stone-900 leading-snug">
                     {service.name}
                   </span>
                   {service.description && (
-                    <p className="text-[11px] text-stone-500 leading-normal">
+                    <p className="text-[11px] text-stone-500 leading-snug">
                       {service.description}
                     </p>
                   )}
-                  <div className="flex items-center gap-3 pt-1">
+                  <div className="flex items-center gap-3 pt-0.5">
                     <span className="flex items-center gap-1 text-[11px] text-stone-500">
                       <Clock className="w-3 h-3 text-stone-400" />
                       {formatDuration(service.duration_minutes)}
@@ -215,17 +215,17 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
       </section>
 
       {/* 3. ЭТАП: ДИЗАЙН */}
-      <section className="space-y-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-700 text-xs font-semibold flex items-center justify-center">
+      <section className="space-y-2">
+        <div className="flex items-start justify-between">
+          <div className="flex items-start gap-2">
+            <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-700 text-xs font-semibold flex items-center justify-center shrink-0 mt-0.5">
               3
             </span>
-            <h3 className="text-sm font-semibold text-stone-900">
+            <h3 className="text-sm font-semibold text-stone-900 leading-tight">
               Дизайн ногтей
             </h3>
           </div>
-          <span className="text-[11px] font-medium text-rose-600">Обязательно</span>
+          <span className="text-[10px] font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100 shrink-0">Обязательно</span>
         </div>
 
         <div className="grid grid-cols-1 gap-2">
@@ -364,27 +364,28 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
             </div>
           </div>
 
-          <button
-            id="btn-proceed-to-slots"
-            type="button"
-            disabled={!isFormValid}
-            onClick={() => {
-              triggerHaptic('medium');
-              if (onProceedToSlots) {
-                onProceedToSlots();
-              } else if (onProceed) {
-                onProceed();
-              }
-            }}
-            className={`px-5 py-3 rounded-xl text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5 shadow-sm ${
-              isFormValid
-                ? 'bg-stone-900 text-white hover:bg-stone-800 active:scale-98 cursor-pointer'
-                : 'bg-stone-200 text-stone-400 cursor-not-allowed'
-            }`}
-          >
-            <span>Выбрать время</span>
-            <span className="text-stone-300">→</span>
-          </button>
+          {isFormValid ? (
+            <button
+              id="btn-proceed-to-slots"
+              type="button"
+              onClick={() => {
+                triggerHaptic('medium');
+                if (onProceedToSlots) {
+                  onProceedToSlots();
+                } else if (onProceed) {
+                  onProceed();
+                }
+              }}
+              className="px-5 py-3 rounded-xl text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5 shadow-sm bg-rose-500 hover:bg-rose-600 text-white active:scale-98 cursor-pointer animate-fade-in"
+            >
+              <span>Выбрать время</span>
+              <span className="text-white/80">→</span>
+            </button>
+          ) : (
+            <div className="text-[11px] text-stone-400 font-medium max-w-[130px] text-right leading-tight">
+              Выберите этапы 1, 2 и 3, чтобы перейти ко времени
+            </div>
+          )}
         </div>
       </div>
     </div>

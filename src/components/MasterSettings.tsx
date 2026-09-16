@@ -505,7 +505,7 @@ export const MasterSettings: React.FC<MasterSettingsProps> = ({ onConfigUpdated 
         </div>
 
         {/* Табы категорий */}
-        <div className="flex p-1 bg-stone-100/80 rounded-xl gap-1">
+        <div className="flex p-1 bg-stone-100/90 rounded-2xl gap-1.5 overflow-x-auto no-scrollbar">
           {categories.map((cat) => (
             <button
               key={cat.key}
@@ -514,15 +514,15 @@ export const MasterSettings: React.FC<MasterSettingsProps> = ({ onConfigUpdated 
                 triggerHaptic('light');
                 setActiveCategory(cat.key);
               }}
-              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer ${
+              className={`flex-1 min-w-[76px] py-1.5 px-2 text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
                 activeCategory === cat.key
-                  ? 'bg-white text-stone-900 shadow-2xs'
+                  ? 'bg-white text-stone-900 shadow-xs'
                   : 'text-stone-500 hover:text-stone-800'
               }`}
             >
               <span>{cat.title}</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                activeCategory === cat.key ? 'bg-rose-100 text-rose-800' : 'bg-stone-200/70 text-stone-600'
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                activeCategory === cat.key ? 'bg-rose-100 text-rose-800' : 'bg-stone-200/80 text-stone-600'
               }`}>
                 {cat.count}
               </span>

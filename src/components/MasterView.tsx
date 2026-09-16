@@ -221,16 +221,18 @@ export const MasterView: React.FC = () => {
           </div>
 
           {/* Выбор даты для просмотра */}
-          <div className="flex items-center gap-2 bg-white p-3 rounded-xl border border-stone-200/80 shadow-xs">
-            <Calendar className="w-4 h-4 text-rose-500 shrink-0" />
-            <span className="text-xs font-semibold text-stone-700 shrink-0">
-              Дата расписания:
-            </span>
+          <div className="flex items-center justify-between gap-2 bg-white p-3 rounded-xl border border-stone-200/80 shadow-xs">
+            <div className="flex items-center gap-2 shrink-0">
+              <Calendar className="w-4 h-4 text-rose-500 shrink-0" />
+              <span className="text-xs font-semibold text-stone-700">
+                Дата:
+              </span>
+            </div>
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-stone-50 text-xs text-stone-800 border border-stone-200 rounded-lg px-2.5 py-1 focus:outline-none focus:border-rose-500 font-semibold cursor-pointer"
+              className="bg-stone-50 text-xs text-stone-800 border border-stone-200 rounded-lg px-2.5 py-1 focus:outline-none focus:border-rose-500 font-semibold cursor-pointer max-w-[150px]"
             />
           </div>
 
@@ -293,7 +295,11 @@ export const MasterView: React.FC = () => {
                 <p className="text-xs font-medium text-stone-700">
                   {statusFilter === 'all'
                     ? 'На этот день записей пока нет'
-                    : `Записей со статусом «${statusFilter}» не найдено`}
+                    : statusFilter === 'confirmed'
+                    ? 'Подтвержденных записей на этот день не найдено'
+                    : statusFilter === 'pending'
+                    ? 'Ожидающих подтверждения записей не найдено'
+                    : 'Отмененных записей не найдено'}
                 </p>
                 <p className="text-[11px] text-stone-400">
                   Все слоты свободны для бронирования клиентами

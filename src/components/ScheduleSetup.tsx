@@ -295,7 +295,7 @@ export const ScheduleSetup: React.FC<ScheduleSetupProps> = ({
         <div className="grid grid-cols-7 gap-1.5">
           {/* Пустые ячейки смещения */}
           {Array.from({ length: firstDayOffset }).map((_, idx) => (
-            <div key={`offset-${idx}`} className="h-12 rounded-xl bg-transparent" />
+            <div key={`offset-${idx}`} className="min-h-[56px] rounded-xl bg-transparent" />
           ))}
 
           {/* Дни месяца */}
@@ -313,11 +313,11 @@ export const ScheduleSetup: React.FC<ScheduleSetupProps> = ({
                   triggerHaptic('light');
                   setSelectedDayDate(day.date);
                 }}
-                className={`h-12 rounded-xl flex flex-col items-center justify-between p-1 transition-all cursor-pointer relative ${
+                className={`min-h-[56px] rounded-xl flex flex-col items-center justify-between p-1.5 transition-all cursor-pointer relative ${
                   isSelected
-                    ? 'ring-2 ring-rose-500 bg-rose-50/80 shadow-xs'
+                    ? 'ring-2 ring-rose-500 bg-rose-50/90 shadow-xs'
                     : isWorking
-                    ? 'bg-emerald-50/60 hover:bg-emerald-100/50 text-emerald-950 border border-emerald-200/50'
+                    ? 'bg-emerald-50/70 hover:bg-emerald-100/60 text-emerald-950 border border-emerald-200/60'
                     : 'bg-stone-100/80 hover:bg-stone-200/50 text-stone-400 border border-stone-200/40'
                 }`}
               >
@@ -334,16 +334,16 @@ export const ScheduleSetup: React.FC<ScheduleSetupProps> = ({
                   )}
                 </div>
 
-                <span className="text-[9px] font-medium leading-none truncate w-full text-center">
+                <span className="text-[9px] font-semibold leading-none truncate w-full text-center my-0.5">
                   {isWorking ? `${day.start_time.split(':')[0]}-${day.end_time.split(':')[0]}` : 'Вых.'}
                 </span>
 
                 {hasApps ? (
-                  <span className="text-[8px] font-bold text-rose-600 bg-rose-100/80 px-1 rounded-sm leading-none py-0.5">
+                  <span className="text-[8px] font-bold text-rose-600 bg-rose-100/90 px-1 rounded-sm leading-none py-0.5">
                     {day.appointments_count} зап.
                   </span>
                 ) : (
-                  <span className="h-2" />
+                  <span className="h-1.5" />
                 )}
               </button>
             );
