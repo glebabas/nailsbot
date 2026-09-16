@@ -12,9 +12,10 @@ import {
   Sparkles,
   Loader2,
   Save,
-  AlertCircle
+  AlertCircle,
+  Globe
 } from 'lucide-react';
-import { Service, ServiceCategory, CategorizedServices, StudioConfig } from '../types';
+import { Service, ServiceCategory, CategorizedServices, StudioConfig, CityTimezone } from '../types';
 import { api } from '../services/api';
 import { triggerHaptic } from '../utils/telegram';
 
@@ -61,8 +62,12 @@ export const MasterSettings: React.FC<MasterSettingsProps> = ({ onConfigUpdated 
   const [config, setConfig] = useState<StudioConfig>({
     studio_name: '',
     studio_address: '',
+    studio_cabinet: '',
+    city: 'Екатеринбург',
+    timezone: 'Asia/Yekaterinburg',
     avatar_url: null,
   });
+  const [cities, setCities] = useState<CityTimezone[]>([]);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [configSavedToast, setConfigSavedToast] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
@@ -103,12 +108,14 @@ export const MasterSettings: React.FC<MasterSettingsProps> = ({ onConfigUpdated 
   const loadData = async () => {
     setLoadingServices(true);
     try {
-      const [conf, srvs] = await Promise.all([
+      const [conf, srvs, cityList] = await Promise.all([
         api.getStudioConfig(),
         api.getServices(),
+        api.getSupportedCities(),
       ]);
       setConfig(conf);
       setServices(srvs);
+      setCities(cityList);
     } catch (e) {
       console.error('Ошибка загрузки данных настроек:', e);
     } finally {
@@ -379,20 +386,74 @@ export const MasterSettings: React.FC<MasterSettingsProps> = ({ onConfigUpdated 
             </div>
           </div>
 
+          {/* Город и часовой пояс */}
+          <div>
+            <label className="block text-[11px] font-semibold text-stone-700 mb-1 flex items-center justify-between">
+              <span className="flex items-center gap-1">
+                <Globe className="w-3 h-3 text-rose-500" />
+                Город и часовой пояс студии
+              </span>
+              <span className="text-[10px] text-rose-600 font-medium">Уведомления приходят по этому времени</span>
+            </label>
+            <div className="relative">
+              <select
+                value={config.timezone || 'Asia/Yekaterinburg'}
+                onChange={(e) => {
+                  const selectedTz = e.target.value;
+                  const foundCity = cities.find((c) => c.timezone === selectedTz);
+                  setConfig({
+                    ...config,
+                    timezone: selectedTz,
+                    city: foundCity ? foundCity.city : config.city,
+                  });
+                }}
+                className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs text-stone-900 focus:outline-none focus:border-rose-400 transition-colors"
+              >
+                {cities.map((c) => (
+                  <option key={c.timezone} value={c.timezone}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="text-[10px] text-stone-400 mt-1">
+              Выбранный пояс: <b>{config.city || 'Екатеринбург'}</b> ({config.timezone || 'Asia/Yekaterinburg'})
+            </p>
+          </div>
+
           <div>
             <label className="block text-[11px] font-semibold text-stone-700 mb-1">
-              Адрес студии / кабинета
+              Адрес студии (улица, дом, квартира/помещение)
             </label>
             <div className="relative">
               <input
                 type="text"
                 value={config.studio_address}
                 onChange={(e) => setConfig({ ...config, studio_address: e.target.value })}
-                placeholder="например: г. Москва, ул. Арбат, д. 10, каб. 304"
+                placeholder="например: г. Екатеринбург, ул. Викулова 78, кв. 300"
                 className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs text-stone-900 focus:outline-none focus:border-rose-400 transition-colors"
                 required
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-stone-700 mb-1 flex items-center justify-between">
+              <span>Кабинет / Домофон (необязательно)</span>
+              <span className="text-[10px] text-stone-400">Только если есть</span>
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={config.studio_cabinet || ''}
+                onChange={(e) => setConfig({ ...config, studio_cabinet: e.target.value })}
+                placeholder="например: офис 204, домофон 204В (если нет — оставьте пустым)"
+                className="w-full bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-xs text-stone-900 focus:outline-none focus:border-rose-400 transition-colors"
+              />
+            </div>
+            <p className="text-[10px] text-stone-400 mt-0.5 leading-tight">
+              Если указан — добавится в напоминание за 2 часа до визита. Если пустой — вымышленный кабинет выводиться не будет.
+            </p>
           </div>
 
           <div className="flex items-center justify-between pt-1">

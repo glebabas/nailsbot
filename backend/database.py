@@ -30,9 +30,74 @@ def get_db():
         db.close()
 
 
+def ensure_db_schema_migrated(db_engine):
+    """Автоматическая проверка и добавление недостающих столбцов в SQLite при обновлении моделей"""
+    from sqlalchemy import text
+    with db_engine.connect() as conn:
+        # 1. global_configs
+        try:
+            cfg_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(global_configs)")).fetchall()]
+            if cfg_cols:
+                cols_to_add = {
+                    "studio_name": "VARCHAR(255) DEFAULT 'Студия маникюра'",
+                    "studio_address": "VARCHAR(255) DEFAULT 'г. Екатеринбург, ул. Викулова 78, кв. 300'",
+                    "studio_cabinet": "VARCHAR(100) DEFAULT NULL",
+                    "city": "VARCHAR(100) DEFAULT 'Екатеринбург'",
+                    "timezone": "VARCHAR(100) DEFAULT 'Asia/Yekaterinburg'",
+                    "avatar_url": "TEXT DEFAULT NULL",
+                    "preparation_instructions": "TEXT DEFAULT 'Не наносите масло и жирный крем за 3 часа до визита.'",
+                    "llm_api_key": "VARCHAR(255) DEFAULT NULL",
+                }
+                for col_name, col_def in cols_to_add.items():
+                    if col_name not in cfg_cols:
+                        conn.execute(text(f"ALTER TABLE global_configs ADD COLUMN {col_name} {col_def}"))
+                conn.commit()
+        except Exception as e:
+            logger.warning(f"Ошибка миграции global_configs: {e}")
+
+        # 2. appointments
+        try:
+            app_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(appointments)")).fetchall()]
+            if app_cols:
+                app_cols_to_add = {
+                    "photo_current": "TEXT DEFAULT NULL",
+                    "photo_ref": "TEXT DEFAULT NULL",
+                    "comment": "TEXT DEFAULT NULL",
+                    "booking_notified_at": "DATETIME DEFAULT NULL",
+                    "reminder_48h_sent_at": "DATETIME DEFAULT NULL",
+                    "reminder_24h_sent_at": "DATETIME DEFAULT NULL",
+                    "reminder_12h_sent_at": "DATETIME DEFAULT NULL",
+                    "reminder_2h_sent_at": "DATETIME DEFAULT NULL",
+                    "confirmed_at": "DATETIME DEFAULT NULL",
+                    "cancelled_at": "DATETIME DEFAULT NULL",
+                    "cancellation_reason": "VARCHAR(255) DEFAULT NULL",
+                    "feedback_requested_at": "DATETIME DEFAULT NULL",
+                    "feedback_rating": "INTEGER DEFAULT NULL",
+                    "feedback_text": "TEXT DEFAULT NULL",
+                }
+                for col_name, col_def in app_cols_to_add.items():
+                    if col_name not in app_cols:
+                        conn.execute(text(f"ALTER TABLE appointments ADD COLUMN {col_name} {col_def}"))
+                conn.commit()
+        except Exception as e:
+            logger.warning(f"Ошибка миграции appointments: {e}")
+
+
+        # 3. users
+        try:
+            user_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(users)")).fetchall()]
+            if user_cols:
+                if "reactivation_sent_at" not in user_cols:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN reactivation_sent_at DATETIME DEFAULT NULL"))
+                conn.commit()
+        except Exception as e:
+            logger.warning(f"Ошибка миграции users: {e}")
+
+
 def init_and_seed_db():
     """Создание таблиц и начальное наполнение услугами и графиком мастера (на русском языке)"""
     Base.metadata.create_all(bind=engine)
+    ensure_db_schema_migrated(engine)
     db = SessionLocal()
 
     try:
@@ -58,14 +123,29 @@ def init_and_seed_db():
                 auto_cancel_hours_before=8,
                 reminder_first_hours_before=24,
                 reminder_second_hours_before=12,
-                studio_name="Студия маникюра Екатерина",
-                studio_address="г. Москва, ул. Арбат, д. 10, кабинет 304",
+                studio_name="Студия маникюра",
+                studio_address="г. Екатеринбург, ул. Викулова 78, кв. 300",
+                studio_cabinet=None,
+                city="Екатеринбург",
+                timezone="Asia/Yekaterinburg",
                 preparation_instructions=(
                     "Перед визитом просьба не наносить жирный крем или масло на руки за 3 часа. "
                     "Если у вас есть аллергия на материалы, предупредите заранее."
                 ),
             )
             db.add(config)
+        else:
+            # Обновляем существующий конфиг, если в нем еще дефолтная Москва
+            cfg = db.query(GlobalConfig).first()
+            if cfg:
+                if not cfg.city:
+                    cfg.city = "Екатеринбург"
+                if not cfg.timezone:
+                    cfg.timezone = "Asia/Yekaterinburg"
+                if "Арбат" in (cfg.studio_address or ""):
+                    cfg.studio_address = "г. Екатеринбург, ул. Викулова 78, кв. 300"
+                    cfg.studio_cabinet = None
+                db.commit()
 
         # 2. Каталог услуг (Конструктор: Снятие, База, Дизайн, Ремонт)
         if db.query(Service).count() == 0:

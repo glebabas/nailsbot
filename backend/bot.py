@@ -24,13 +24,17 @@ from aiogram.types import (
     CallbackQuery,
     InlineKeyboardMarkup,
     InlineKeyboardButton,
+    ReplyKeyboardMarkup,
+    KeyboardButton,
     WebAppInfo,
 )
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 
 from backend.database import SessionLocal
-from backend.models import Appointment, AppointmentStatus, User, UserRole, GlobalConfig
+from backend.models import Appointment, AppointmentStatus, User, UserRole, GlobalConfig, WaitlistEntry
+from backend.time_utils import get_local_naive_now, format_address_with_cabinet
+from backend.notifications import notify_waitlist_slot_available
 
 # Логирование
 logging.basicConfig(
@@ -59,7 +63,7 @@ def is_master_user(tg_id: int) -> bool:
 
 
 def get_client_keyboard(webapp_url: str, master_username: str) -> InlineKeyboardMarkup:
-    """Клавиатура для клиента: Запись в Mini App и связь с мастером"""
+    """Клавиатура для клиента: Запись в Mini App, просмотр записей и связь с мастером"""
     buttons = [
         [
             InlineKeyboardButton(
@@ -68,6 +72,10 @@ def get_client_keyboard(webapp_url: str, master_username: str) -> InlineKeyboard
             )
         ],
         [
+            InlineKeyboardButton(
+                text="📅 Мои записи",
+                callback_data="client:my_appointments"
+            ),
             InlineKeyboardButton(
                 text="💬 Связь с мастером",
                 url=f"https://t.me/{master_username}"
@@ -85,6 +93,23 @@ def get_client_keyboard(webapp_url: str, master_username: str) -> InlineKeyboard
         ]
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_client_reply_keyboard(webapp_url: str) -> ReplyKeyboardMarkup:
+    """Постоянные кнопки чата внизу экрана для быстрого доступа клиента"""
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(text="💅 Записаться онлайн", web_app=WebAppInfo(url=f"{webapp_url}?role=client")),
+                KeyboardButton(text="📅 Мои записи")
+            ],
+            [
+                KeyboardButton(text="📍 Адрес студии"),
+                KeyboardButton(text="💬 Написать мастеру")
+            ]
+        ],
+        resize_keyboard=True
+    )
 
 
 def get_master_keyboard(webapp_url: str, master_username: str) -> InlineKeyboardMarkup:
@@ -169,6 +194,9 @@ async def command_start_handler(message: Message):
             f"Нажмите <b>«Записаться»</b>, чтобы открыть Mini App:"
         )
         keyboard = get_client_keyboard(WEBAPP_URL, MASTER_USERNAME)
+        await message.answer(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
+        await message.answer("📌 Для быстрого доступа используйте кнопки меню ниже:", reply_markup=get_client_reply_keyboard(WEBAPP_URL))
+        return
 
     await message.answer(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
@@ -276,20 +304,219 @@ async def command_help_handler(message: Message):
 
 
 # =====================================================================
+# ПРОСМОТР ЗАПИСЕЙ КЛИЕНТА (В БОТЕ)
+# =====================================================================
+async def send_client_appointments(bot: Bot, chat_id: int, tg_id: int):
+    """Отправляет клиенту детальный список его записей с кнопками управления"""
+    db = SessionLocal()
+    try:
+        conf = db.query(GlobalConfig).first()
+        raw_addr = conf.studio_address if conf and conf.studio_address else "г. Екатеринбург, ул. Викулова 78, кв. 300"
+        cab = conf.studio_cabinet if conf else None
+        formatted_address = format_address_with_cabinet(raw_addr, cab)
+
+        client_user = db.query(User).filter(User.tg_id == tg_id).first()
+        if not client_user:
+            text = (
+                "💅 <b>У вас пока нет активных записей.</b>\n\n"
+                "Вы можете выбрать удобный день и время в онлайн-расписании прямо сейчас:"
+            )
+            kb = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="💅 Записаться онлайн",
+                            web_app=WebAppInfo(url=f"{WEBAPP_URL}?role=client")
+                        )
+                    ]
+                ]
+            )
+            await bot.send_message(chat_id, text, reply_markup=kb, parse_mode=ParseMode.HTML)
+            return
+
+        apps = (
+            db.query(Appointment)
+            .filter(Appointment.client_id == client_user.id)
+            .order_by(Appointment.date.desc(), Appointment.start_time.desc())
+            .limit(10)
+            .all()
+        )
+
+        if not apps:
+            text = (
+                "💅 <b>У вас пока нет активных записей.</b>\n\n"
+                "Вы можете выбрать удобный день и время в онлайн-расписании:"
+            )
+            kb = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="💅 Записаться онлайн",
+                            web_app=WebAppInfo(url=f"{WEBAPP_URL}?role=client")
+                        )
+                    ]
+                ]
+            )
+            await bot.send_message(chat_id, text, reply_markup=kb, parse_mode=ParseMode.HTML)
+            return
+
+        today = date.today()
+        upcoming = [a for a in apps if a.date >= today and a.status in (AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED)]
+        past = [a for a in apps if a not in upcoming]
+
+        if upcoming:
+            await bot.send_message(chat_id, f"📋 <b>Ваши предстоящие записи ({len(upcoming)}):</b>", parse_mode=ParseMode.HTML)
+            for app in upcoming:
+                status_badge = "⏳ Ожидает подтверждения" if app.status == AppointmentStatus.PENDING else "✅ Подтверждена"
+                date_str = app.date.strftime("%d.%m.%Y")
+                start_str = app.start_time.strftime("%H:%M")
+                end_str = app.end_time.strftime("%H:%M")
+                services_str = ", ".join(s.name for s in app.services) if app.services else "Маникюр"
+                price_str = f"{float(app.total_price):,.0f} ₽"
+
+                card_text = (
+                    f"💅 <b>Запись на {date_str}</b>\n\n"
+                    f"⏰ <b>Время:</b> {start_str} — {end_str}\n"
+                    f"📌 <b>Статус:</b> {status_badge}\n"
+                    f"💰 <b>Стоимость:</b> {price_str}\n"
+                    f"💅 <b>Услуги:</b> {services_str}\n\n"
+                    f"📍 <b>Адрес:</b> {formatted_address}"
+                )
+
+                kb = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text="❌ Отменить эту запись",
+                                callback_data=f"cancel_client:{app.id}"
+                            )
+                        ],
+                        [
+                            InlineKeyboardButton(
+                                text="💅 Открыть в Mini App",
+                                web_app=WebAppInfo(url=f"{WEBAPP_URL}?role=client")
+                            )
+                        ]
+                    ]
+                )
+                await bot.send_message(chat_id, card_text, reply_markup=kb, parse_mode=ParseMode.HTML)
+        else:
+            await bot.send_message(
+                chat_id,
+                "✨ <b>Предстоящих записей пока нет.</b>\nВы можете оформить новую запись в любое удобное время:",
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text="💅 Записаться онлайн",
+                                web_app=WebAppInfo(url=f"{WEBAPP_URL}?role=client")
+                            )
+                        ]
+                    ]
+                ),
+                parse_mode=ParseMode.HTML
+            )
+
+        if past:
+            past_lines = []
+            for a in past[:4]:
+                st_icon = "🏁" if a.status == AppointmentStatus.COMPLETED else "❌"
+                st_label = "Завершена" if a.status == AppointmentStatus.COMPLETED else "Отменена"
+                past_lines.append(f"• {a.date.strftime('%d.%m.%Y')} в {a.start_time.strftime('%H:%M')} — {st_icon} {st_label}")
+            past_summary = "📜 <b>История предыдущих визитов:</b>\n" + "\n".join(past_lines)
+            await bot.send_message(chat_id, past_summary, parse_mode=ParseMode.HTML)
+
+    finally:
+        db.close()
+
+
+@router.message(Command("my_appointments"))
+@router.message(Command("appointments"))
+@router.message(F.text.in_(["📅 Мои записи", "Мои записи", "мои записи"]))
+async def message_my_appointments_handler(message: Message):
+    """Команда просмотра записей клиентом"""
+    user = message.from_user
+    if not user:
+        return
+    await send_client_appointments(message.bot, message.chat.id, user.id)
+
+
+@router.callback_query(F.data == "client:my_appointments")
+async def callback_my_appointments_handler(callback: CallbackQuery):
+    """Инлайн-кнопка просмотра записей клиентом"""
+    await callback.answer()
+    user = callback.from_user
+    if not user:
+        return
+    await send_client_appointments(callback.bot, callback.message.chat.id, user.id)
+
+
+@router.message(F.text.in_(["📍 Адрес студии", "Адрес студии", "адрес"]))
+async def message_address_handler(message: Message):
+    """Быстрый просмотр адреса по кнопке меню"""
+    db = SessionLocal()
+    try:
+        conf = db.query(GlobalConfig).first()
+        studio_addr = conf.studio_address if conf and conf.studio_address else "г. Екатеринбург, ул. Викулова 78, кв. 300"
+        cab = conf.studio_cabinet if conf else None
+        formatted_address = format_address_with_cabinet(studio_addr, cab)
+        instructions = conf.preparation_instructions if conf and conf.preparation_instructions else "Пожалуйста, не наносите жирный крем или масло для кутикулы за 2-3 часа до визита."
+        text = (
+            f"📍 <b>Адрес студии:</b>\n"
+            f"{formatted_address}\n\n"
+            f"⚠️ <b>Памятка перед визитом:</b>\n"
+            f"• {instructions}\n"
+            f"• Старайтесь приходить вовремя: мастер готовит рабочее место индивидуально."
+        )
+        await message.answer(text, parse_mode=ParseMode.HTML)
+    finally:
+        db.close()
+
+
+@router.message(F.text.in_(["💬 Написать мастеру", "Связь с мастером"]))
+async def message_contact_master_handler(message: Message):
+    """Быстрая ссылка на диалог с мастером"""
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="💬 Открыть диалог с мастером",
+                    url=f"https://t.me/{MASTER_USERNAME}"
+                )
+            ]
+        ]
+    )
+    await message.answer(
+        f"💅 <b>Мастер маникюра на связи:</b> @{MASTER_USERNAME}\n"
+        f"Вы можете задать любой вопрос или уточнить детали дизайна:",
+        reply_markup=kb,
+        parse_mode=ParseMode.HTML
+    )
+
+
+# =====================================================================
 # CALLBACK-ЗАПРОСЫ ИНФО-КНОПОК
 # =====================================================================
 @router.callback_query(F.data == "info:address")
 async def callback_address_handler(callback: CallbackQuery):
     await callback.answer()
-    text = (
-        "📍 <b>Адрес студии:</b>\n"
-        "г. Москва, ул. Арбат, д. 10 (3 минуты от м. Арбатская)\n"
-        "Кабинет 204, домофон 204В.\n\n"
-        "⚠️ <b>Памятка перед визитом:</b>\n"
-        "• Пожалуйста, не наносите жирный крем или масло для кутикулы за 2-3 часа до визита.\n"
-        "• Старайтесь приходить вовремя: опоздание более чем на 15 минут сокращает время на сложный дизайн."
-    )
-    await callback.message.answer(text, parse_mode=ParseMode.HTML)
+    db = SessionLocal()
+    try:
+        conf = db.query(GlobalConfig).first()
+        studio_addr = conf.studio_address if conf and conf.studio_address else "г. Екатеринбург, ул. Викулова 78, кв. 300"
+        cab = conf.studio_cabinet if conf else None
+        formatted_address = format_address_with_cabinet(studio_addr, cab)
+        instructions = conf.preparation_instructions if conf and conf.preparation_instructions else "Пожалуйста, не наносите жирный крем или масло для кутикулы за 2-3 часа до визита."
+        text = (
+            f"📍 <b>Адрес студии:</b>\n"
+            f"{formatted_address}\n\n"
+            f"⚠️ <b>Памятка перед визитом:</b>\n"
+            f"• {instructions}\n"
+            f"• Старайтесь приходить вовремя: мастер готовит инструменты и рабочее место заранее."
+        )
+        await callback.message.answer(text, parse_mode=ParseMode.HTML)
+    finally:
+        db.close()
 
 
 @router.callback_query(F.data == "info:rules")
@@ -410,6 +637,29 @@ async def callback_cancel_client_handler(callback: CallbackQuery):
                 await callback.bot.send_message(mid, master_msg, parse_mode=ParseMode.HTML)
             except Exception:
                 pass
+
+        # Проверяем лист ожидания на освободившуюся дату
+        wl_entry = (
+            db.query(WaitlistEntry)
+            .filter(
+                WaitlistEntry.date == app.date,
+                WaitlistEntry.is_notified == False,
+            )
+            .first()
+        )
+        if wl_entry and wl_entry.client and wl_entry.client.tg_id:
+            try:
+                await notify_waitlist_slot_available(
+                    wl_entry.client.tg_id,
+                    wl_entry.client.first_name,
+                    app.date,
+                    WEBAPP_URL,
+                )
+                wl_entry.is_notified = True
+                wl_entry.notified_at = datetime.now()
+                db.commit()
+            except Exception as ex:
+                logger.warning(f"Ошибка оповещения waitlist: {ex}")
     finally:
         db.close()
 
@@ -526,15 +776,20 @@ async def fallback_text_handler(message: Message):
 # ФОНОВЫЙ ШЕДУЛЕР УВЕДОМЛЕНИЙ (T-48h, T-24h, T-8h, T-2h, +1h, 90 дней)
 # =====================================================================
 async def check_and_send_scheduled_events(bot: Bot):
-    """Проверяет базу данных и отправляет необходимые уведомления по графику"""
+    """Проверяет базу данных и отправляет необходимые уведомления по графику с учетом часового пояса студии"""
     db = SessionLocal()
     try:
-        now = datetime.now()
         conf = db.query(GlobalConfig).first()
-        studio_addr = conf.studio_address if conf and conf.studio_address else "г. Москва, ул. Арбат, д. 10"
+        tz_name = conf.timezone if conf and conf.timezone else "Asia/Yekaterinburg"
+        studio_addr = conf.studio_address if conf and conf.studio_address else "г. Екатеринбург, ул. Викулова 78, кв. 300"
+        cab = conf.studio_cabinet if conf else None
+        formatted_addr = format_address_with_cabinet(studio_addr, cab)
 
-        recent_date = now.date() - timedelta(days=1)
-        future_date = now.date() + timedelta(days=3)
+        now_local = get_local_naive_now(tz_name)
+        now_dt = datetime.now()
+
+        recent_date = now_local.date() - timedelta(days=1)
+        future_date = now_local.date() + timedelta(days=3)
 
         appointments = (
             db.query(Appointment)
@@ -551,8 +806,8 @@ async def check_and_send_scheduled_events(bot: Bot):
 
             app_start = datetime.combine(app.date, app.start_time)
             app_end = datetime.combine(app.date, app.end_time)
-            hours_to_start = (app_start - now).total_seconds() / 3600.0
-            hours_since_end = (now - app_end).total_seconds() / 3600.0
+            hours_to_start = (app_start - now_local).total_seconds() / 3600.0
+            hours_since_end = (now_local - app_end).total_seconds() / 3600.0
 
             client_tg_id = app.client.tg_id
             client_name = app.client.first_name
@@ -573,14 +828,14 @@ async def check_and_send_scheduled_events(bot: Bot):
                 text = (
                     f"⏳ <b>Подтвердите запись на маникюр!</b>\n\n"
                     f"📅 <b>{date_str} в {start_str}</b>\n"
-                    f"📍 {studio_addr}\n"
+                    f"📍 <b>Адрес:</b> {formatted_addr}\n"
                     f"💅 {services_str}\n"
                     f"💰 {float(app.total_price):,.0f} ₽\n\n"
                     f"Пожалуйста, подтвердите визит кнопкой ниже:"
                 )
                 try:
                     await bot.send_message(client_tg_id, text, reply_markup=kb, parse_mode=ParseMode.HTML)
-                    app.reminder_48h_sent_at = now
+                    app.reminder_48h_sent_at = now_dt
                     db.commit()
                 except Exception as ex:
                     logger.warning(f"Не удалось отправить 48h напоминание в {client_tg_id}: {ex}")
@@ -590,13 +845,13 @@ async def check_and_send_scheduled_events(bot: Bot):
                 if app.status == AppointmentStatus.CONFIRMED:
                     text = (
                         f"🌸 <b>Напоминаем: завтра визит на маникюр!</b>\n\n"
-                        f"⏰ <b>{start_str}</b> | 📍 {studio_addr}\n"
+                        f"⏰ <b>{start_str}</b> | 📍 {formatted_addr}\n"
                         f"💅 {services_str}\n\n"
                         f"💡 <i>Памятка: не наносите масло и жирный крем за 2–3 часа до визита.</i>"
                     )
                     try:
                         await bot.send_message(client_tg_id, text, parse_mode=ParseMode.HTML)
-                        app.reminder_24h_sent_at = now
+                        app.reminder_24h_sent_at = now_dt
                         db.commit()
                     except Exception as ex:
                         logger.warning(f"Не удалось отправить 24h напоминание в {client_tg_id}: {ex}")
@@ -611,12 +866,12 @@ async def check_and_send_scheduled_events(bot: Bot):
                     )
                     text = (
                         f"⚠️ <b>Вы ещё не подтвердили визит на завтра!</b>\n\n"
-                        f"⏰ <b>{start_str}</b> | 📍 {studio_addr}\n\n"
+                        f"⏰ <b>{start_str}</b> | 📍 {formatted_addr}\n\n"
                         f"<i>Если запись не будет подтверждена за 8 часов до приёма, бронь автоматически аннулируется:</i>"
                     )
                     try:
                         await bot.send_message(client_tg_id, text, reply_markup=kb, parse_mode=ParseMode.HTML)
-                        app.reminder_24h_sent_at = now
+                        app.reminder_24h_sent_at = now_dt
                         db.commit()
                     except Exception as ex:
                         logger.warning(f"Не удалось отправить 24h запрос подтверждения в {client_tg_id}: {ex}")
@@ -624,7 +879,7 @@ async def check_and_send_scheduled_events(bot: Bot):
             # 3. Авто-отмена за 8 часов неподтверждённых записей
             elif 0 < hours_to_start <= 8.0 and app.status == AppointmentStatus.PENDING:
                 app.status = AppointmentStatus.CANCELLED
-                app.cancelled_at = now
+                app.cancelled_at = now_dt
                 app.cancellation_reason = "Не подтверждено за 8 часов до приёма"
                 db.commit()
 
@@ -666,13 +921,12 @@ async def check_and_send_scheduled_events(bot: Bot):
             elif 0 < hours_to_start <= 2.0 and app.status == AppointmentStatus.CONFIRMED and app.reminder_2h_sent_at is None:
                 text = (
                     f"⏰ <b>Ждём вас через 2 часа (в {start_str})!</b>\n\n"
-                    f"📍 <b>Адрес:</b> {studio_addr}\n"
-                    f"🔔 <b>Кабинет:</b> 204 (домофон 204В)\n\n"
+                    f"📍 <b>Адрес:</b> {formatted_addr}\n\n"
                     f"Приходите без опозданий, мастер уже готовит инструменты! ✨"
                 )
                 try:
                     await bot.send_message(client_tg_id, text, parse_mode=ParseMode.HTML)
-                    app.reminder_2h_sent_at = now
+                    app.reminder_2h_sent_at = now_dt
                     db.commit()
                 except Exception as ex:
                     logger.warning(f"Ошибка отправки 2h напоминания клиенту {client_tg_id}: {ex}")
@@ -697,23 +951,23 @@ async def check_and_send_scheduled_events(bot: Bot):
                 )
                 try:
                     await bot.send_message(client_tg_id, text, reply_markup=rating_kb, parse_mode=ParseMode.HTML)
-                    app.feedback_requested_at = now
+                    app.feedback_requested_at = now_dt
                     db.commit()
                 except Exception as ex:
                     logger.warning(f"Ошибка отправки запроса отзыва в {client_tg_id}: {ex}")
 
         # 6. Реактивация спящих клиентов (не был 90 дней)
-        ninety_days_ago = now.date() - timedelta(days=90)
+        ninety_days_ago = now_local.date() - timedelta(days=90)
         clients = db.query(User).filter(User.role == UserRole.CLIENT).all()
         for cl in clients:
             if not cl.tg_id:
                 continue
-            if cl.reactivation_sent_at and (now - cl.reactivation_sent_at).days < 90:
+            if cl.reactivation_sent_at and (now_dt - cl.reactivation_sent_at).days < 90:
                 continue
 
             has_upcoming = db.query(Appointment).filter(
                 Appointment.client_id == cl.id,
-                Appointment.date >= now.date(),
+                Appointment.date >= now_local.date(),
                 Appointment.status.in_([AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED])
             ).first()
             if has_upcoming:
@@ -742,7 +996,7 @@ async def check_and_send_scheduled_events(bot: Bot):
                 )
                 try:
                     await bot.send_message(cl.tg_id, text, reply_markup=kb, parse_mode=ParseMode.HTML)
-                    cl.reactivation_sent_at = now
+                    cl.reactivation_sent_at = now_dt
                     db.commit()
                 except Exception as ex:
                     logger.warning(f"Не удалось отправить реактивацию клиенту {cl.tg_id}: {ex}")

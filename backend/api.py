@@ -15,11 +15,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from backend.database import get_db
-from backend.notifications import notify_new_booking_created
+from backend.notifications import (
+    notify_new_booking_created, notify_booking_cancelled_to_master, notify_waitlist_slot_available
+)
 from backend.models import (
     User, UserRole, Service, ServiceCategory,
     MasterSchedule, Appointment, AppointmentStatus, appointment_services_table,
-    GlobalConfig
+    GlobalConfig, WaitlistEntry
 )
 from backend.schemas import (
     CategorizedServicesResponse, ServiceResponse,
@@ -27,11 +29,13 @@ from backend.schemas import (
     AppointmentCreateRequest, AppointmentResponse,
     MasterDayScheduleResponse, MasterMonthOverviewResponse, MasterMonthDaySummary,
     ScheduleDaySetting, ScheduleTemplateApplyRequest, BulkScheduleSaveRequest, ScheduleBulkResponse,
-    StudioConfigResponse, StudioConfigUpdateRequest, ServiceCreateRequest, ServiceUpdateRequest
+    StudioConfigResponse, StudioConfigUpdateRequest, ServiceCreateRequest, ServiceUpdateRequest,
+    ClientAppointmentItem, ClientCancelRequest
 )
 from backend.scheduling_engine import (
     SmartSchedulingEngine, ServiceItem, minutes_to_str, time_to_minutes
 )
+from backend.time_utils import CITY_TIMEZONES, format_address_with_cabinet, get_local_naive_now
 
 router = APIRouter(tags=["Nail Studio Mini App API"])
 
@@ -340,7 +344,8 @@ def create_appointment(
     # Запуск фоновой отправки мгновенных талонов клиенту и алертов мастеру
     try:
         conf = db.query(GlobalConfig).first()
-        studio_addr = conf.studio_address if conf and conf.studio_address else "г. Москва, ул. Арбат, д. 10"
+        studio_addr = conf.studio_address if conf and conf.studio_address else "г. Екатеринбург, ул. Викулова 78, кв. 300"
+        studio_cab = conf.studio_cabinet if conf else None
         studio_n = conf.studio_name if conf and conf.studio_name else "Студия маникюра"
         master_ids_list = [
             int(x.strip()) for x in os.getenv("MASTER_TG_IDS", "1324896381,781432351").split(",") if x.strip()
@@ -362,7 +367,10 @@ def create_appointment(
             comment=appointment.comment,
             studio_name=studio_n,
             studio_address=studio_addr,
+            studio_cabinet=studio_cab,
             master_tg_ids=master_ids_list,
+            photo_current=appointment.photo_current,
+            photo_ref=appointment.photo_ref,
         )
     except Exception as e:
         # Логируем, но не блокируем успешный ответ клиенту
@@ -837,7 +845,7 @@ def update_appointment_status(
 
 
 # =====================================================================
-# 8. НАСТРОЙКИ СТУДИИ (ПРОФИЛЬ, НАЗВАНИЕ, АДРЕС, АВАТАРКА)
+# 8. НАСТРОЙКИ СТУДИИ (ПРОФИЛЬ, НАЗВАНИЕ, АДРЕС, ГОРОД, ЧАСОВОЙ ПОЯС)
 # =====================================================================
 @router.get(
     "/config",
@@ -845,12 +853,14 @@ def update_appointment_status(
     summary="Получение настроек студии"
 )
 def get_studio_config(db: Session = Depends(get_db)):
-    """Возвращает настройки студии (название, адрес, аватарку)"""
+    """Возвращает настройки студии (название, адрес, город, часовой пояс, аватарку)"""
     config = db.query(GlobalConfig).first()
     if not config:
         config = GlobalConfig(
-            studio_name="Студия маникюра Екатерина",
-            studio_address="г. Москва, ул. Арбат, д. 10, кабинет 304",
+            studio_name="Студия маникюра",
+            studio_address="г. Екатеринбург, ул. Викулова 78, кв. 300",
+            city="Екатеринбург",
+            timezone="Asia/Yekaterinburg",
         )
         db.add(config)
         db.commit()
@@ -858,13 +868,27 @@ def get_studio_config(db: Session = Depends(get_db)):
     return config
 
 
+@router.get(
+    "/config/cities",
+    summary="Список поддерживаемых городов и часовых поясов РФ"
+)
+def get_supported_cities():
+    """Возвращает список городов с часовыми поясами для выбора в настройках"""
+    return CITY_TIMEZONES
+
+
 @router.post(
     "/config",
     response_model=StudioConfigResponse,
     summary="Обновление настроек студии (профиль мастера)"
 )
+@router.put(
+    "/config",
+    response_model=StudioConfigResponse,
+    summary="Обновление настроек студии (профиль мастера)"
+)
 def update_studio_config(payload: StudioConfigUpdateRequest, db: Session = Depends(get_db)):
-    """Обновляет название студии, адрес, аватарку или инструкции"""
+    """Обновляет название студии, адрес, кабинет, город, таймзону или инструкции"""
     config = db.query(GlobalConfig).first()
     if not config:
         config = GlobalConfig()
@@ -874,6 +898,13 @@ def update_studio_config(payload: StudioConfigUpdateRequest, db: Session = Depen
         config.studio_name = payload.studio_name
     if payload.studio_address is not None:
         config.studio_address = payload.studio_address
+    if payload.studio_cabinet is not None:
+        val = payload.studio_cabinet.strip()
+        config.studio_cabinet = val if val else None
+    if payload.city is not None:
+        config.city = payload.city
+    if payload.timezone is not None:
+        config.timezone = payload.timezone
     if payload.avatar_url is not None:
         config.avatar_url = payload.avatar_url
     if payload.preparation_instructions is not None:
@@ -987,4 +1018,130 @@ def delete_service(service_id: int, hard: bool = False, db: Session = Depends(ge
         srv.is_active = False
         db.commit()
         return {"status": "deactivated", "message": "Услуга деактивирована"}
+
+
+# =====================================================================
+# 10. КЛИЕНТСКИЙ ЛК: ПРОСМОТР И ОТМЕНА ЗАПИСЕЙ
+# =====================================================================
+@router.get(
+    "/client/appointments",
+    response_model=List[ClientAppointmentItem],
+    summary="Получение записей клиента по Telegram ID"
+)
+def get_client_appointments_api(
+    tg_id: int = Query(..., description="Telegram ID клиента"),
+    db: Session = Depends(get_db)
+):
+    """Возвращает историю и активные записи клиента с флагом возможности отмены"""
+    user = db.query(User).filter(User.tg_id == tg_id).first()
+    if not user:
+        return []
+
+    conf = db.query(GlobalConfig).first()
+    studio_name = conf.studio_name if conf else "Студия маникюра"
+    studio_addr = conf.studio_address if conf else "г. Екатеринбург, ул. Викулова 78, кв. 300"
+    studio_cab = conf.studio_cabinet if conf else None
+
+    apps = (
+        db.query(Appointment)
+        .filter(Appointment.client_id == user.id)
+        .order_by(Appointment.date.desc(), Appointment.start_time.desc())
+        .all()
+    )
+
+    today = date.today()
+    result = []
+    for app in apps:
+        can_cancel = (
+            app.status in (AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED)
+            and app.date >= today
+        )
+        result.append(
+            ClientAppointmentItem(
+                id=app.id,
+                date=app.date.isoformat(),
+                start_time=f"{app.start_time.hour:02d}:{app.start_time.minute:02d}",
+                end_time=f"{app.end_time.hour:02d}:{app.end_time.minute:02d}",
+                total_procedure_minutes=app.total_procedure_minutes,
+                total_duration_minutes=app.total_duration_minutes,
+                total_price=float(app.total_price),
+                status=app.status,
+                services=[s.name for s in app.services],
+                studio_name=studio_name,
+                studio_address=studio_addr,
+                studio_cabinet=studio_cab,
+                comment=app.comment,
+                photo_current=app.photo_current,
+                photo_ref=app.photo_ref,
+                can_cancel=can_cancel,
+            )
+        )
+    return result
+
+
+@router.post(
+    "/appointments/{appointment_id}/client-cancel",
+    summary="Отмена записи клиентом из Telegram Mini App"
+)
+async def cancel_appointment_by_client_api(
+    appointment_id: int,
+    payload: ClientCancelRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """Клиент отменяет визит, слот освобождается, мастер и лист ожидания оповещаются"""
+    app = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Запись не найдена")
+
+    if app.status == AppointmentStatus.CANCELLED:
+        return {"status": "already_cancelled", "message": "Запись уже была отменена ранее"}
+
+    app.status = AppointmentStatus.CANCELLED
+    app.cancelled_at = datetime.now()
+    app.cancellation_reason = payload.reason or "Отменено клиентом в приложении"
+    db.commit()
+
+    # Оповещаем мастера
+    master_ids_list = [
+        int(x.strip()) for x in os.getenv("MASTER_TG_IDS", "1324896381,781432351").split(",") if x.strip()
+    ]
+    client_name = app.client.first_name if app.client else "Клиент"
+    client_uname = app.client.username if app.client else None
+
+    background_tasks.add_task(
+        notify_booking_cancelled_to_master,
+        appointment_id=app.id,
+        client_name=client_name,
+        client_username=client_uname,
+        app_date=app.date,
+        start_time=app.start_time,
+        reason=app.cancellation_reason,
+        master_tg_ids=master_ids_list,
+    )
+
+    # Проверяем лист ожидания
+    wl_entry = (
+        db.query(WaitlistEntry)
+        .filter(
+            WaitlistEntry.date == app.date,
+            WaitlistEntry.is_notified == False,
+        )
+        .first()
+    )
+    if wl_entry and wl_entry.client and wl_entry.client.tg_id:
+        webapp_url = os.getenv("WEBAPP_URL", "https://foyer-purging-superbowl.ngrok-free")
+        background_tasks.add_task(
+            notify_waitlist_slot_available,
+            client_tg_id=wl_entry.client.tg_id,
+            client_name=wl_entry.client.first_name,
+            target_date=app.date,
+            webapp_url=webapp_url,
+        )
+        wl_entry.is_notified = True
+        wl_entry.notified_at = datetime.now()
+        db.commit()
+
+    return {"status": "ok", "message": "Запись успешно отменена"}
+
 

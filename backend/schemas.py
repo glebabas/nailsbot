@@ -200,6 +200,9 @@ class MasterMonthOverviewResponse(BaseModel):
 class StudioConfigResponse(BaseModel):
     studio_name: str
     studio_address: str
+    studio_cabinet: Optional[str] = None
+    city: str = "Екатеринбург"
+    timezone: str = "Asia/Yekaterinburg"
     avatar_url: Optional[str] = None
     preparation_instructions: Optional[str] = None
     default_sterilization_buffer: int = 15
@@ -211,6 +214,9 @@ class StudioConfigResponse(BaseModel):
 class StudioConfigUpdateRequest(BaseModel):
     studio_name: Optional[str] = None
     studio_address: Optional[str] = None
+    studio_cabinet: Optional[str] = None
+    city: Optional[str] = None
+    timezone: Optional[str] = None
     avatar_url: Optional[str] = None
     preparation_instructions: Optional[str] = None
     default_sterilization_buffer: Optional[int] = None
@@ -234,5 +240,32 @@ class ServiceUpdateRequest(BaseModel):
     price: Optional[float] = None
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
+
+
+class ClientAppointmentItem(BaseModel):
+    id: int
+    date: str
+    start_time: str
+    end_time: str
+    total_procedure_minutes: int
+    total_duration_minutes: int
+    total_price: float
+    status: AppointmentStatus
+    services: List[str]
+    studio_name: str
+    studio_address: str
+    studio_cabinet: Optional[str] = None
+    comment: Optional[str] = None
+    photo_current: Optional[str] = None
+    photo_ref: Optional[str] = None
+    can_cancel: bool
+
+    class Config:
+        from_attributes = True
+
+
+class ClientCancelRequest(BaseModel):
+    reason: Optional[str] = "Отменено клиентом"
+
 
 

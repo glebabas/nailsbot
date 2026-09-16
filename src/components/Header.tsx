@@ -7,11 +7,13 @@ import { StudioConfig } from '../types';
 interface HeaderProps {
   currentStep: number;
   onStepClick: (step: number) => void;
+  onOpenAppointments?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   currentStep,
   onStepClick,
+  onOpenAppointments,
 }) => {
   const tgUser = getTelegramUser();
   const [studioConfig, setStudioConfig] = useState<StudioConfig | null>(null);
@@ -51,16 +53,31 @@ export const Header: React.FC<HeaderProps> = ({
               <span>•</span>
               <span className="flex items-center gap-0.5 truncate">
                 <MapPin className="w-2.5 h-2.5 text-rose-500 shrink-0" />
-                <span className="truncate">{studioConfig?.studio_address || 'ул. Арбат, 10'}</span>
+                <span className="truncate">{studioConfig?.studio_address || 'г. Екатеринбург, ул. Викулова 78, кв. 300'}</span>
               </span>
             </div>
           </div>
         </div>
 
-        {/* Индикатор авторизации Telegram */}
-        <div className="flex items-center gap-1.5 bg-rose-50/80 border border-rose-100/80 px-2.5 py-1 rounded-full text-[11px] text-rose-800 font-medium">
-          <UserCheck className="w-3 h-3 text-rose-500" />
-          <span className="truncate max-w-[90px]">{tgUser.firstName || 'Гость'}</span>
+        {/* Правый блок: Мои записи и профиль */}
+        <div className="flex items-center gap-2 shrink-0">
+          {onOpenAppointments && (
+            <button
+              onClick={onOpenAppointments}
+              type="button"
+              className="flex items-center gap-1 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1 rounded-full text-xs font-semibold text-rose-700 transition-all shadow-xs cursor-pointer"
+              title="Посмотреть мои записи"
+            >
+              <span>📅</span>
+              <span className="hidden xs:inline">Записи</span>
+            </button>
+          )}
+
+          {/* Индикатор авторизации Telegram */}
+          <div className="flex items-center gap-1.5 bg-rose-50/80 border border-rose-100/80 px-2.5 py-1 rounded-full text-[11px] text-rose-800 font-medium">
+            <UserCheck className="w-3 h-3 text-rose-500" />
+            <span className="truncate max-w-[70px]">{tgUser.firstName || 'Гость'}</span>
+          </div>
         </div>
       </div>
 

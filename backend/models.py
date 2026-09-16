@@ -227,7 +227,10 @@ class GlobalConfig(Base):
     reminder_second_hours_before: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
     
     studio_name: Mapped[str] = mapped_column(String(255), default="Студия маникюра", nullable=False)
-    studio_address: Mapped[str] = mapped_column(String(255), default="г. Москва, ул. Арбат, д. 10", nullable=False)
+    studio_address: Mapped[str] = mapped_column(String(255), default="г. Екатеринбург, ул. Викулова 78, кв. 300", nullable=False)
+    studio_cabinet: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, comment="Кабинет или домофон, если есть")
+    city: Mapped[str] = mapped_column(String(100), default="Екатеринбург", nullable=False)
+    timezone: Mapped[str] = mapped_column(String(100), default="Asia/Yekaterinburg", nullable=False)
     avatar_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     preparation_instructions: Mapped[str] = mapped_column(
         Text, 

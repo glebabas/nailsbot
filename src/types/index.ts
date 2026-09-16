@@ -129,9 +129,39 @@ export interface MasterMonthOverview {
 export interface StudioConfig {
   studio_name: string;
   studio_address: string;
+  studio_cabinet?: string | null;
+  city?: string;
+  timezone?: string;
   avatar_url?: string | null;
   preparation_instructions?: string;
   default_sterilization_buffer?: number;
 }
+
+export interface CityTimezone {
+  city: string;
+  timezone: string;
+  utc_offset: string;
+  label: string;
+}
+
+export interface ClientAppointment {
+  id: number;
+  date: string;
+  start_time: string;
+  end_time: string;
+  total_procedure_minutes: number;
+  total_duration_minutes: number;
+  total_price: number;
+  status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
+  services: string[];
+  studio_name: string;
+  studio_address: string;
+  studio_cabinet?: string | null;
+  comment?: string | null;
+  photo_current?: string | null;
+  photo_ref?: string | null;
+  can_cancel: boolean;
+}
+
 
 

@@ -11,3 +11,5 @@ __pycache__/
 *.py[cod]
 *$py.class
 nail_bot.db*
+venv/
+.pytest_cache/

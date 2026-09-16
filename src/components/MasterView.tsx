@@ -52,12 +52,21 @@ export const MasterView: React.FC = () => {
     api.getStudioConfig().then(setStudioConfig);
   }, [selectedDate]);
 
-  const filteredAppointments = appointments.filter((a) => a.date === selectedDate);
-  const totalRevenue = filteredAppointments
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'confirmed' | 'cancelled'>('all');
+
+  const filteredAppointments = appointments
+    .filter((a) => a.date === selectedDate)
+    .filter((a) => {
+      if (statusFilter === 'all') return true;
+      return a.status === statusFilter;
+    });
+
+  const allDayAppointments = appointments.filter((a) => a.date === selectedDate);
+  const totalRevenue = allDayAppointments
     .filter((a) => a.status !== 'cancelled')
     .reduce((sum, a) => sum + a.total_price, 0);
 
-  const totalProcedureMinutes = filteredAppointments
+  const totalProcedureMinutes = allDayAppointments
     .filter((a) => a.status !== 'cancelled')
     .reduce((sum, a) => sum + a.total_procedure_minutes, 0);
 
@@ -221,8 +230,50 @@ export const MasterView: React.FC = () => {
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-stone-50 text-xs text-stone-800 border border-stone-200 rounded-lg px-2.5 py-1 focus:outline-none focus:border-rose-500 font-semibold"
+              className="bg-stone-50 text-xs text-stone-800 border border-stone-200 rounded-lg px-2.5 py-1 focus:outline-none focus:border-rose-500 font-semibold cursor-pointer"
             />
+          </div>
+
+          {/* Фильтры статуса записей */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
+            {(
+              [
+                { id: 'all', label: 'Все' },
+                { id: 'pending', label: 'Ожидают' },
+                { id: 'confirmed', label: 'Подтверждены' },
+                { id: 'cancelled', label: 'Отменены' },
+              ] as const
+            ).map((tab) => {
+              const count =
+                tab.id === 'all'
+                  ? allDayAppointments.length
+                  : allDayAppointments.filter((a) => a.status === tab.id).length;
+              const isActive = statusFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('light');
+                    setStatusFilter(tab.id);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                    isActive
+                      ? 'bg-rose-500 text-white shadow-xs'
+                      : 'bg-white text-stone-600 border border-stone-200/80 hover:bg-stone-50'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                      isActive ? 'bg-white/20 text-white' : 'bg-stone-100 text-stone-500'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Список клиентов и таймлайн записей */}
@@ -240,7 +291,9 @@ export const MasterView: React.FC = () => {
               <div className="bg-white p-6 rounded-2xl border border-stone-200 text-center space-y-1">
                 <Calendar className="w-6 h-6 text-stone-300 mx-auto" />
                 <p className="text-xs font-medium text-stone-700">
-                  На этот день записей пока нет
+                  {statusFilter === 'all'
+                    ? 'На этот день записей пока нет'
+                    : `Записей со статусом «${statusFilter}» не найдено`}
                 </p>
                 <p className="text-[11px] text-stone-400">
                   Все слоты свободны для бронирования клиентами
@@ -306,15 +359,23 @@ export const MasterView: React.FC = () => {
 
                         <div className="flex items-center gap-3 text-[11px] text-stone-500">
                           {app.client_phone && (
-                            <span className="flex items-center gap-1">
+                            <a
+                              href={`tel:${app.client_phone}`}
+                              className="flex items-center gap-1 hover:text-stone-900 transition-colors"
+                            >
                               <Phone className="w-3 h-3 text-stone-400" />
                               {app.client_phone}
-                            </span>
+                            </a>
                           )}
                           {app.client_username && (
-                            <span className="flex items-center gap-1 text-rose-600 font-medium">
-                              <MessageCircle className="w-3 h-3" />@{app.client_username}
-                            </span>
+                            <a
+                              href={`https://t.me/${app.client_username.replace(/^@/, '')}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-1 text-rose-600 hover:text-rose-700 font-medium"
+                            >
+                              <MessageCircle className="w-3 h-3" />@{app.client_username.replace(/^@/, '')}
+                            </a>
                           )}
                         </div>
                       </div>

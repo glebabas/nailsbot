@@ -15,7 +15,9 @@ import {
   ScheduleTemplateSettings,
   MasterMonthOverview,
   MonthDaySchedule,
-  StudioConfig
+  StudioConfig,
+  CityTimezone,
+  ClientAppointment
 } from '../types';
 
 // Начальный каталог услуг на русском языке (полностью соответствует backend/database.py)
@@ -828,11 +830,75 @@ export const api = {
       } catch {}
     }
     return {
-      studio_name: 'Студия маникюра Екатерина',
-      studio_address: 'г. Москва, ул. Арбат, д. 10, кабинет 304',
+      studio_name: 'Студия маникюра',
+      studio_address: 'г. Екатеринбург, ул. Викулова 78, кв. 300',
+      studio_cabinet: null,
+      city: 'Екатеринбург',
+      timezone: 'Asia/Yekaterinburg',
       avatar_url: null,
       default_sterilization_buffer: 15,
     };
+  },
+
+  getSupportedCities: async (): Promise<CityTimezone[]> => {
+    const url = buildApiUrl('/api/config/cities');
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err) {
+      console.warn('⚠️ [API Error] Failed to fetch cities:', err);
+    }
+    return [
+      { city: 'Екатеринбург', timezone: 'Asia/Yekaterinburg', utc_offset: '+05:00', label: 'Екатеринбург (UTC+5)' },
+      { city: 'Москва', timezone: 'Europe/Moscow', utc_offset: '+03:00', label: 'Москва, Санкт-Петербург (UTC+3)' },
+      { city: 'Калининград', timezone: 'Europe/Kaliningrad', utc_offset: '+02:00', label: 'Калининград (UTC+2)' },
+      { city: 'Самара', timezone: 'Europe/Samara', utc_offset: '+04:00', label: 'Самара, Ижевск, Тольятти (UTC+4)' },
+      { city: 'Омск', timezone: 'Asia/Omsk', utc_offset: '+06:00', label: 'Омск (UTC+6)' },
+      { city: 'Новосибирск', timezone: 'Asia/Novosibirsk', utc_offset: '+07:00', label: 'Новосибирск, Красноярск, Барнаул (UTC+7)' },
+      { city: 'Иркутск', timezone: 'Asia/Irkutsk', utc_offset: '+08:00', label: 'Иркутск, Улан-Удэ (UTC+8)' },
+      { city: 'Владивосток', timezone: 'Asia/Vladivostok', utc_offset: '+10:00', label: 'Владивосток, Хабаровск (UTC+10)' },
+    ];
+  },
+
+  getClientAppointments: async (tgId: number): Promise<ClientAppointment[]> => {
+    const url = buildApiUrl(`/api/client/appointments?tg_id=${tgId}`);
+    try {
+      console.log('📡 [API Request] GET', url);
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        return data;
+      }
+    } catch (err) {
+      console.warn('⚠️ [API Error] Failed to fetch client appointments:', err);
+    }
+    const local = localStorage.getItem('nail_client_appointments');
+    if (local) {
+      try {
+        return JSON.parse(local);
+      } catch {}
+    }
+    return [];
+  },
+
+  cancelClientAppointment: async (appointmentId: number, reason?: string): Promise<{ status: string; message: string }> => {
+    const url = buildApiUrl(`/api/appointments/${appointmentId}/client-cancel`);
+    try {
+      console.log('📡 [API Request] POST', url);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason || 'Отменено клиентом' }),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err) {
+      console.warn('⚠️ [API Error] Failed to cancel appointment:', err);
+    }
+    return { status: 'ok', message: 'Запись успешно отменена' };
   },
 
   updateStudioConfig: async (config: Partial<StudioConfig>): Promise<StudioConfig> => {

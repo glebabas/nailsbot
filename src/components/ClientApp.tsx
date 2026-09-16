@@ -5,6 +5,7 @@ import { SlotSelector } from './SlotSelector';
 import { PhotoUpload } from './PhotoUpload';
 import { BookingConfirmation } from './BookingConfirmation';
 import { SuccessScreen } from './SuccessScreen';
+import { ClientAppointmentsModal } from './ClientAppointmentsModal';
 import {
   CategorizedServices,
   BookingState,
@@ -23,6 +24,7 @@ export const ClientApp: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [services, setServices] = useState<CategorizedServices>(INITIAL_SERVICES);
   const [createdAppointment, setCreatedAppointment] = useState<Appointment | null>(null);
+  const [isAppointmentsOpen, setIsAppointmentsOpen] = useState<boolean>(false);
 
   const tgUser = getTelegramUser();
   const todayStr = new Date().toISOString().split('T')[0];
@@ -214,12 +216,30 @@ export const ClientApp: React.FC = () => {
           triggerHaptic('light');
           setCurrentStep(step);
         }}
+        onOpenAppointments={() => setIsAppointmentsOpen(true)}
       />
 
       {/* Основной контейнер формы */}
       <main className="flex-1 max-w-md w-full mx-auto p-4">
         {currentStep === 1 && (
-          <ServiceSelector
+          <>
+            <button
+              type="button"
+              onClick={() => setIsAppointmentsOpen(true)}
+              className="w-full mb-3.5 px-4 py-2.5 bg-gradient-to-r from-rose-50 to-pink-50 border border-rose-200/80 rounded-2xl flex items-center justify-between text-left hover:border-rose-300 transition-all shadow-xs cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl">📅</span>
+                <div>
+                  <div className="text-xs font-bold text-rose-950">Уже записаны на маникюр?</div>
+                  <div className="text-[11px] text-rose-600">Нажмите, чтобы посмотреть свои записи</div>
+                </div>
+              </div>
+              <span className="text-xs font-semibold text-rose-500 bg-white px-2.5 py-1 rounded-full border border-rose-200">
+                Мои записи →
+              </span>
+            </button>
+            <ServiceSelector
             services={services}
             selectedRemovalId={booking.selectedRemovalId}
             selectedBaseId={booking.selectedBaseId}
@@ -232,6 +252,7 @@ export const ClientApp: React.FC = () => {
             onProceed={handleProceedToStep2}
             onProceedToSlots={handleProceedToStep2}
           />
+          </>
         )}
 
         {currentStep === 2 && (
@@ -290,6 +311,16 @@ export const ClientApp: React.FC = () => {
           />
         )}
       </main>
+
+      <ClientAppointmentsModal
+        isOpen={isAppointmentsOpen}
+        onClose={() => setIsAppointmentsOpen(false)}
+        tgId={tgUser.id}
+        onBookNew={() => {
+          setCurrentStep(1);
+          setIsAppointmentsOpen(false);
+        }}
+      />
     </div>
   );
 };
