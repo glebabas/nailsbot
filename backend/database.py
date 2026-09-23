@@ -149,10 +149,17 @@ def init_and_seed_db():
                 db.commit()
 
         # 2. Каталог услуг (Конструктор: Снятие, База, Дизайн, Ремонт)
-        if db.query(Service).count() == 0:
+        has_canonical = db.query(Service).filter(Service.name.like("%длина до 10%")).first() is not None
+        if db.query(Service).count() == 0 or not has_canonical:
+            # Очищаем устаревшие мок-услуги
+            db.query(AppointmentService).delete()
+            db.query(Service).delete()
+            db.commit()
+
             services_data = [
                 # Категория 1: Снятие (Removal)
                 Service(
+                    id=1,
                     category=ServiceCategory.REMOVAL,
                     name="без снятия",
                     description="Ногти чистые, снятие предыдущего материала не требуется",
@@ -161,6 +168,7 @@ def init_and_seed_db():
                     sort_order=1,
                 ),
                 Service(
+                    id=2,
                     category=ServiceCategory.REMOVAL,
                     name="снятие покрытия",
                     description="Бережное аппаратное снятие покрытия фрезой",
@@ -169,6 +177,7 @@ def init_and_seed_db():
                     sort_order=2,
                 ),
                 Service(
+                    id=3,
                     category=ServiceCategory.REMOVAL,
                     name="снятие наращенных ногтей",
                     description="Снятие наращенных ногтей",
@@ -177,6 +186,7 @@ def init_and_seed_db():
                     sort_order=3,
                 ),
                 Service(
+                    id=4,
                     category=ServiceCategory.REMOVAL,
                     name="любое снятие + маникюр (без дальнейшего покрытия)",
                     description="Снятие любого покрытия и гигиенический маникюр",
@@ -187,6 +197,7 @@ def init_and_seed_db():
 
                 # Категория 2: Базовая услуга (Base)
                 Service(
+                    id=10,
                     category=ServiceCategory.BASE,
                     name="-",
                     description="Без основного покрытия",
@@ -195,6 +206,7 @@ def init_and_seed_db():
                     sort_order=10,
                 ),
                 Service(
+                    id=11,
                     category=ServiceCategory.BASE,
                     name="маникюр с покрытием на свои до 1 длины",
                     description="Маникюр с покрытием на свои ногти до 1 длины",
@@ -203,6 +215,7 @@ def init_and_seed_db():
                     sort_order=11,
                 ),
                 Service(
+                    id=12,
                     category=ServiceCategory.BASE,
                     name="маникюр с наращиванием ногтей длина до 3",
                     description="Маникюр с наращиванием ногтей длина до 3",
@@ -211,6 +224,7 @@ def init_and_seed_db():
                     sort_order=12,
                 ),
                 Service(
+                    id=13,
                     category=ServiceCategory.BASE,
                     name="маникюр с наращивание ногтей длина до 7",
                     description="Маникюр с наращиванием ногтей длина до 7",
@@ -219,6 +233,7 @@ def init_and_seed_db():
                     sort_order=13,
                 ),
                 Service(
+                    id=14,
                     category=ServiceCategory.BASE,
                     name="маникюр с наращиванием ногтей длина до 10",
                     description="Маникюр с наращиванием ногтей длина до 10",
@@ -229,6 +244,7 @@ def init_and_seed_db():
 
                 # Категория 3: Дизайн (Design)
                 Service(
+                    id=20,
                     category=ServiceCategory.DESIGN,
                     name="без дизайна (чистый однотон)",
                     description="Классическое однотонное покрытие",
@@ -237,6 +253,7 @@ def init_and_seed_db():
                     sort_order=20,
                 ),
                 Service(
+                    id=21,
                     category=ServiceCategory.DESIGN,
                     name="френч любым цветом",
                     description="Френч любым цветом на всех ногтях",
@@ -245,6 +262,7 @@ def init_and_seed_db():
                     sort_order=21,
                 ),
                 Service(
+                    id=22,
                     category=ServiceCategory.DESIGN,
                     name="легкий дизайн (втирка/покрытие гель-лаком/кошачий глаз)",
                     description="Втирка, покрытие гель-лаком или кошачий глаз",
@@ -253,6 +271,7 @@ def init_and_seed_db():
                     sort_order=22,
                 ),
                 Service(
+                    id=23,
                     category=ServiceCategory.DESIGN,
                     name="средний дизайн (декоративные элементы/фигурки/бульонки/стразы/паутинка/градиент/минималистичная роспись/наклейки/слайдеры/френч с вышеперечисленным)",
                     description="Декоративные элементы, фигурки, бульонки, стразы, слайдеры, роспись",
@@ -261,6 +280,7 @@ def init_and_seed_db():
                     sort_order=23,
                 ),
                 Service(
+                    id=24,
                     category=ServiceCategory.DESIGN,
                     name="сложный дизайн (аквариумный дизайн/авторская роспись/сочетание большого количества элементов и цветов/инкрустация кристаллами/геометрия)",
                     description="Аквариумный дизайн, сложная авторская роспись, инкрустация",
@@ -271,6 +291,7 @@ def init_and_seed_db():
 
                 # Категория 4: Ремонт / Укрепление (Repair)
                 Service(
+                    id=30,
                     category=ServiceCategory.REPAIR,
                     name="Ремонт трещины / донаращивание (1 ноготь)",
                     description="Восстановление сломанного уголка или трещины",
@@ -279,6 +300,7 @@ def init_and_seed_db():
                     sort_order=30,
                 ),
                 Service(
+                    id=31,
                     category=ServiceCategory.REPAIR,
                     name="Донаращивание угла / длины (1 ноготь)",
                     description="Восстановление формы или донаращивание одного ногтя",

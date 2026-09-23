@@ -47,7 +47,7 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
 
   const selectedServices = allServices.filter((s) => currentSelectedIds.includes(s.id));
   const procedureMinutes = selectedServices.reduce((acc, s) => acc + s.duration_minutes, 0);
-  const sterilizationBufferMinutes = 15;
+  const sterilizationBufferMinutes = 20;
   const totalDurationMinutes = procedureMinutes + sterilizationBufferMinutes;
   const totalPrice = selectedServices.reduce((acc, s) => acc + s.price, 0);
 

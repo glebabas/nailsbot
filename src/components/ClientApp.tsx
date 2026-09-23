@@ -30,9 +30,9 @@ export const ClientApp: React.FC = () => {
   const todayStr = new Date().toISOString().split('T')[0];
 
   const [booking, setBooking] = useState<BookingState>({
-    selectedRemovalId: 1, // По умолчанию: "Без снятия"
-    selectedBaseId: 10,   // По умолчанию: "Комбинированный маникюр + гель-лак"
-    selectedDesignId: 20, // По умолчанию: "Без дизайна"
+    selectedRemovalId: null,
+    selectedBaseId: null,
+    selectedDesignId: null,
     selectedRepairIds: [],
     targetDate: todayStr,
     selectedSlot: null,
