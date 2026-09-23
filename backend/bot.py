@@ -1030,8 +1030,9 @@ async def start_bot():
     # Фоновая задача шедулера напоминаний
     scheduler_task = asyncio.create_task(run_scheduler(bot))
 
-    logger.info("Бот запущен. Ожидание событий Telegram...")
+    logger.info("Бот запущен. Очистка старых вебхуков и ожидание событий Telegram...")
     try:
+        await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot)
     finally:
         scheduler_task.cancel()
