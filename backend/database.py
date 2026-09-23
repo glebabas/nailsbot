@@ -9,7 +9,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from backend.models import (
     Base, User, UserRole, Service, ServiceCategory,
-    MasterSchedule, Appointment, AppointmentStatus, GlobalConfig
+    MasterSchedule, Appointment, AppointmentStatus, GlobalConfig,
+    appointment_services_table
 )
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./nail_bot.db")
@@ -152,7 +153,7 @@ def init_and_seed_db():
         has_canonical = db.query(Service).filter(Service.name.like("%длина до 10%")).first() is not None
         if db.query(Service).count() == 0 or not has_canonical:
             # Очищаем устаревшие мок-услуги
-            db.query(AppointmentService).delete()
+            db.execute(appointment_services_table.delete())
             db.query(Service).delete()
             db.commit()
 
