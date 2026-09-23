@@ -131,8 +131,8 @@ def calculate_available_slots(payload: SlotsRequest, db: Session = Depends(get_d
         .first()
     )
 
-    # Определяем буфер стерилизации мастера (по умолчанию 15 мин)
-    sterilization_buffer = schedule.sterilization_buffer_minutes if schedule else 15
+    # Определяем буфер перерыва мастера (по умолчанию 20 мин)
+    sterilization_buffer = schedule.sterilization_buffer_minutes if schedule else 20
 
     # Считаем совокупное время и стоимость
     timing = SmartSchedulingEngine.calculate_total_duration(
@@ -270,7 +270,7 @@ def create_appointment(
     # Считаем длительность и стоимость
     services_duration = sum(s.duration_minutes for s in services)
     total_price = sum(s.price for s in services)
-    sterilization_buffer = 15
+    sterilization_buffer = schedule.sterilization_buffer_minutes if schedule else 20
 
     total_duration_with_buffer = services_duration + sterilization_buffer
 
@@ -928,14 +928,14 @@ def update_studio_config(payload: StudioConfigUpdateRequest, db: Session = Depen
 )
 def create_service(payload: ServiceCreateRequest, db: Session = Depends(get_db)):
     """Создает новую услугу в выбранной категории"""
-    # Определяем порядок сортировки, если не задан
-    if payload.sort_order is None or payload.sort_order == 0:
-        max_order = (
-            db.query(func.max(Service.sort_order))
-            .filter(Service.category == payload.category)
-            .scalar()
-            or 0
-        )
+    # Определяем порядок сортировки (гарантируем добавление в конец категории)
+    max_order = (
+        db.query(func.max(Service.sort_order))
+        .filter(Service.category == payload.category)
+        .scalar()
+        or 0
+    )
+    if payload.sort_order is None or payload.sort_order <= 0 or payload.sort_order <= max_order:
         sort_order = max_order + 1
     else:
         sort_order = payload.sort_order

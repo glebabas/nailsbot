@@ -21,15 +21,13 @@ import { Appointment, StudioConfig } from '../types';
 import { api, getStoredAppointments } from '../services/api';
 import { triggerHaptic, getTelegramUser } from '../utils/telegram';
 import { ScheduleSetup } from './ScheduleSetup';
-import { MasterSettings } from './MasterSettings';
-import { Settings } from 'lucide-react';
 
 export const MasterView: React.FC = () => {
   const tgUser = getTelegramUser();
-  const [activeTab, setActiveTab] = useState<'appointments' | 'schedule' | 'settings'>(() => {
+  const [activeTab, setActiveTab] = useState<'appointments' | 'schedule'>(() => {
     if (typeof window !== 'undefined') {
       const tabParam = new URLSearchParams(window.location.search).get('tab');
-      if (tabParam === 'settings' || tabParam === 'schedule' || tabParam === 'appointments') {
+      if (tabParam === 'schedule' || tabParam === 'appointments') {
         return tabParam;
       }
     }
@@ -110,31 +108,13 @@ export const MasterView: React.FC = () => {
               </span>
             </div>
             <p className="text-[11px] text-stone-500 truncate">
-              {studioConfig?.studio_address || (tgUser.firstName ? `${tgUser.firstName} • Студия` : 'Стерилизация, референсы и график')}
+              {studioConfig?.studio_address || (tgUser.firstName ? `${tgUser.firstName} • Студия` : 'Записи, референсы и график')}
             </p>
           </div>
         </div>
-
-        <button
-          id="master-header-settings-btn"
-          type="button"
-          onClick={() => {
-            triggerHaptic('light');
-            setActiveTab(activeTab === 'settings' ? 'appointments' : 'settings');
-          }}
-          className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 shadow-2xs ${
-            activeTab === 'settings'
-              ? 'bg-rose-500 text-white border-rose-600 shadow-xs'
-              : 'bg-stone-50 hover:bg-stone-100 text-stone-700 border-stone-200'
-          }`}
-          title="Настройки студии и услуг"
-        >
-          <Settings className={`w-3.5 h-3.5 ${activeTab === 'settings' ? 'text-white' : 'text-rose-500'}`} />
-          <span>Настройки</span>
-        </button>
       </div>
 
-      {/* Вкладки: Записи / График / Настройки */}
+      {/* Вкладки: Записи / График */}
       <div className="bg-stone-100/90 p-1 rounded-2xl flex border border-stone-200/60 shadow-2xs gap-1">
         <button
           id="master-tab-appointments"
@@ -169,29 +149,10 @@ export const MasterView: React.FC = () => {
           <CalendarDays className="w-3.5 h-3.5 text-rose-500" />
           <span>График</span>
         </button>
-
-        <button
-          id="master-tab-settings"
-          type="button"
-          onClick={() => {
-            triggerHaptic('light');
-            setActiveTab('settings');
-          }}
-          className={`flex-1 py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-            activeTab === 'settings'
-              ? 'bg-white text-stone-900 shadow-xs'
-              : 'text-stone-500 hover:text-stone-800'
-          }`}
-        >
-          <Settings className="w-3.5 h-3.5 text-rose-500" />
-          <span>Настройки</span>
-        </button>
       </div>
 
       {/* Контент активной вкладки */}
-      {activeTab === 'settings' ? (
-        <MasterSettings onConfigUpdated={(conf) => setStudioConfig(conf)} />
-      ) : activeTab === 'schedule' ? (
+      {activeTab === 'schedule' ? (
         <ScheduleSetup
           masterId={1}
           onScheduleUpdated={refreshAppointments}

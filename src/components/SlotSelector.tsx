@@ -144,26 +144,11 @@ export const SlotSelector: React.FC<SlotSelectorProps> = ({
 
       {/* Информационный баннер умного расчета */}
       {timing && (
-        <div className="bg-gradient-to-br from-rose-50 to-pink-50/60 border border-rose-200/80 p-3.5 rounded-2xl shadow-xs space-y-2">
+        <div className="bg-gradient-to-br from-rose-50 to-pink-50/60 border border-rose-200/80 p-3.5 rounded-2xl shadow-xs">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-stone-600 font-medium">Расчетное время работы:</span>
-            <span className="font-bold text-stone-900">
+            <span className="text-stone-600 font-medium">Расчетное время процедуры:</span>
+            <span className="font-bold text-rose-600 text-sm">
               {formatDuration(timing.servicesDurationMinutes)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-stone-600 flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              Стерилизация инструментов:
-            </span>
-            <span className="text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200/60">
-              +15 мин
-            </span>
-          </div>
-          <div className="pt-2 border-t border-rose-200/60 flex items-center justify-between text-xs font-semibold">
-            <span className="text-rose-950">Необходимое окно мастера:</span>
-            <span className="text-rose-600 font-bold text-sm bg-white px-2 py-0.5 rounded-lg border border-rose-200 shadow-2xs">
-              {formatDuration(timing.totalDurationMinutes)}
             </span>
           </div>
         </div>

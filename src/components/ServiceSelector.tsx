@@ -358,34 +358,35 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
                 • {formatDuration(procedureMinutes)}
               </span>
             </div>
-            <div className="flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-sm w-fit font-medium">
-              <ShieldCheck className="w-2.5 h-2.5 text-emerald-600" />
-              <span>+15 мин дезинфекция & сухожар</span>
-            </div>
+            {!isFormValid && (
+              <div className="text-[10px] text-rose-500 font-medium">
+                Выберите обязательные этапы 1, 2 и 3
+              </div>
+            )}
           </div>
 
-          {isFormValid ? (
-            <button
-              id="btn-proceed-to-slots"
-              type="button"
-              onClick={() => {
-                triggerHaptic('medium');
-                if (onProceedToSlots) {
-                  onProceedToSlots();
-                } else if (onProceed) {
-                  onProceed();
-                }
-              }}
-              className="px-5 py-3 rounded-xl text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5 shadow-sm bg-rose-500 hover:bg-rose-600 text-white active:scale-98 cursor-pointer animate-fade-in"
-            >
-              <span>Выбрать время</span>
-              <span className="text-white/80">→</span>
-            </button>
-          ) : (
-            <div className="text-[11px] text-stone-400 font-medium max-w-[130px] text-right leading-tight">
-              Выберите этапы 1, 2 и 3, чтобы перейти ко времени
-            </div>
-          )}
+          <button
+            id="btn-proceed-to-slots"
+            type="button"
+            disabled={!isFormValid}
+            onClick={() => {
+              if (!isFormValid) return;
+              triggerHaptic('medium');
+              if (onProceedToSlots) {
+                onProceedToSlots();
+              } else if (onProceed) {
+                onProceed();
+              }
+            }}
+            className={`px-5 py-3 rounded-xl text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5 shadow-sm ${
+              isFormValid
+                ? 'bg-rose-500 hover:bg-rose-600 text-white active:scale-98 cursor-pointer'
+                : 'bg-stone-200 text-stone-400 cursor-not-allowed opacity-80'
+            }`}
+          >
+            <span>Выбрать время</span>
+            <span className={isFormValid ? 'text-white/80' : 'text-stone-400'}>→</span>
+          </button>
         </div>
       </div>
     </div>

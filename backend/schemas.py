@@ -141,7 +141,7 @@ class ScheduleTemplateApplyRequest(BaseModel):
     end_time: str = Field("20:00", description="Время окончания рабочего дня (HH:MM)")
     break_start: Optional[str] = Field("14:00", description="Время начала обеда (HH:MM)")
     break_end: Optional[str] = Field("15:00", description="Время окончания обеда (HH:MM)")
-    sterilization_buffer_minutes: int = Field(15, description="Буфер стерилизации между клиентами в минутах")
+    sterilization_buffer_minutes: int = Field(20, description="Перерыв между клиентами в минутах")
     custom_working_dates: Optional[List[dt.date]] = Field(None, description="Список конкретных рабочих дат (для custom)")
 
 

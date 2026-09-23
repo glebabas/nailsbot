@@ -192,9 +192,23 @@ export const INITIAL_SERVICES: CategorizedServices = {
   ],
 };
 
-const STERILIZATION_BUFFER_MINUTES = 15;
+let cachedServices: CategorizedServices | null = null;
+
+export const setCachedServices = (data: CategorizedServices) => {
+  cachedServices = data;
+};
+
+const STERILIZATION_BUFFER_MINUTES = 20;
 
 export const getAllFlatServices = (): Service[] => {
+  if (cachedServices) {
+    return [
+      ...cachedServices.removal,
+      ...cachedServices.base,
+      ...cachedServices.design,
+      ...cachedServices.repair,
+    ];
+  }
   return [
     ...INITIAL_SERVICES.removal,
     ...INITIAL_SERVICES.base,
@@ -203,8 +217,26 @@ export const getAllFlatServices = (): Service[] => {
   ];
 };
 
-export const calculateTiming = (selectedServiceIds: number[]): CalculatedTiming => {
-  const allServices = getAllFlatServices();
+export const calculateTiming = (
+  selectedServiceIds: number[],
+  customServices?: Service[] | CategorizedServices
+): CalculatedTiming => {
+  let allServices: Service[];
+  if (customServices) {
+    if (Array.isArray(customServices)) {
+      allServices = customServices;
+    } else {
+      allServices = [
+        ...customServices.removal,
+        ...customServices.base,
+        ...customServices.design,
+        ...customServices.repair,
+      ];
+    }
+  } else {
+    allServices = getAllFlatServices();
+  }
+
   const selected = allServices.filter((s) => selectedServiceIds.includes(s.id));
 
   const servicesDuration = selected.reduce((sum, s) => sum + s.duration_minutes, 0);
@@ -467,12 +499,14 @@ export const api = {
       if (res.ok) {
         const data = await res.json();
         console.log('✅ [API Response] Services loaded from backend:', Object.keys(data).length, 'categories');
+        setCachedServices(data);
         return data;
       }
       console.warn('⚠️ [API Warning] Backend returned non-ok status for services:', res.status);
     } catch (err) {
       console.warn('⚠️ [API Error] Failed to connect to FastAPI backend for services, using local fallback:', err);
     }
+    setCachedServices(INITIAL_SERVICES);
     return INITIAL_SERVICES;
   },
 
@@ -481,7 +515,7 @@ export const api = {
     dateStr: string,
     serviceIds: number[]
   ): Promise<{ timing: CalculatedTiming; slots: AvailableSlot[]; isDayOff: boolean }> => {
-    const timing = calculateTiming(serviceIds);
+    const fallbackTiming = calculateTiming(serviceIds);
     const url = buildApiUrl('/api/slots');
     try {
       console.log('📡 [API Request] POST', url, { masterId, dateStr, serviceIds });
@@ -497,6 +531,16 @@ export const api = {
       if (res.ok) {
         const data = await res.json();
         console.log('✅ [API Response] Slots received from backend:', data.available_slots?.length || 0);
+        const timing: CalculatedTiming = data.duration_breakdown
+          ? {
+              servicesDurationMinutes: data.duration_breakdown.services_duration_minutes,
+              sterilizationBufferMinutes: data.duration_breakdown.sterilization_buffer_minutes,
+              totalDurationMinutes: data.duration_breakdown.total_duration_minutes,
+              totalPrice: data.duration_breakdown.total_price,
+              servicesSummary: data.duration_breakdown.services_summary,
+            }
+          : fallbackTiming;
+
         return {
           timing,
           slots: data.available_slots || [],
@@ -510,11 +554,11 @@ export const api = {
 
     const { slots, isDayOff } = computeAvailableSlotsLocal(
       dateStr,
-      timing.totalDurationMinutes,
-      timing.servicesDurationMinutes
+      fallbackTiming.totalDurationMinutes,
+      fallbackTiming.servicesDurationMinutes
     );
 
-    return { timing, slots, isDayOff };
+    return { timing: fallbackTiming, slots, isDayOff };
   },
 
   createAppointment: async (booking: BookingState): Promise<Appointment> => {

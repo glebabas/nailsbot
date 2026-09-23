@@ -143,10 +143,33 @@ const envMasterIds = ((import.meta as any).env?.VITE_MASTER_TG_IDS as string | u
 
 export const MASTER_TG_IDS = Array.from(new Set([1324896381, 781432351, 549120491, 123456789, ...envMasterIds]));
 
+// Строгая проверка прав мастера (только доверенные Telegram ID или localhost dev)
+export const isUserStrictMaster = (): boolean => {
+  const tg = getTelegramWebApp();
+  const userId = tg?.initDataUnsafe?.user?.id;
+  if (userId && MASTER_TG_IDS.includes(userId)) {
+    return true;
+  }
+  // В режиме разработки разрешаем по localhost или query param
+  if (typeof window !== 'undefined') {
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const params = new URLSearchParams(window.location.search);
+    if (isLocal && params.get('role') === 'master') {
+      return true;
+    }
+  }
+  return false;
+};
+
 export const isUserMaster = (): boolean => {
   const tg = getTelegramWebApp();
   const userId = tg?.initDataUnsafe?.user?.id;
   const startParam = (tg?.initDataUnsafe as { start_param?: string } | undefined)?.start_param;
+
+  // Если известен Telegram ID - проверяем строго
+  if (userId) {
+    return MASTER_TG_IDS.includes(userId);
+  }
 
   // Проверка параметров URL (?role=master или ?role=client)
   if (typeof window !== 'undefined') {
@@ -158,11 +181,6 @@ export const isUserMaster = (): boolean => {
 
   if (startParam === 'master') return true;
   if (startParam === 'client') return false;
-
-  // Проверка по ID пользователя в Telegram
-  if (userId && MASTER_TG_IDS.includes(userId)) {
-    return true;
-  }
 
   return false;
 };

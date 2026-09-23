@@ -257,10 +257,17 @@ export const MasterSettings: React.FC<MasterSettingsProps> = ({ onConfigUpdated 
         };
       });
     } else {
-      // Создание новой
+      // Создание новой (ставим строго в конец категории)
+      const categoryServices = services[formData.category] || [];
+      const maxOrder = categoryServices.reduce(
+        (max, s) => Math.max(max, s.sort_order ?? 0),
+        0
+      );
+      const nextOrder = maxOrder > 0 ? maxOrder + 1 : 1;
+
       const created = await api.createService({
         ...formData,
-        sort_order: services[formData.category].length + 1,
+        sort_order: nextOrder,
         is_active: true,
       });
 

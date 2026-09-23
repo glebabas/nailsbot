@@ -117,14 +117,14 @@ def get_master_keyboard(webapp_url: str, master_username: str) -> InlineKeyboard
     buttons = [
         [
             InlineKeyboardButton(
-                text="⚙️ Кабинет мастера (Записи и График)",
+                text="📋 Кабинет мастера (Записи и График)",
                 web_app=WebAppInfo(url=f"{webapp_url}?role=master")
             )
         ],
         [
             InlineKeyboardButton(
-                text="🛠 Настройки (Услуги, Адрес, Аватарка)",
-                web_app=WebAppInfo(url=f"{webapp_url}?role=master&tab=settings")
+                text="⚙️ Настройки (Услуги, Адрес, Аватарка)",
+                web_app=WebAppInfo(url=f"{webapp_url}?view=settings")
             )
         ],
         [
@@ -141,7 +141,7 @@ def get_master_keyboard(webapp_url: str, master_username: str) -> InlineKeyboard
         ],
         [
             InlineKeyboardButton(
-                text="📋 Быстрая сводка дня",
+                text="📊 Быстрая сводка дня",
                 callback_data="master:summary"
             )
         ]
@@ -176,7 +176,7 @@ async def command_start_handler(message: Message):
             f"• 🛠️ <b>Настройки:</b> название студии, адрес, аватарка, каталог услуг и цены\n"
             f"• 🗓️ <b>График:</b> рабочие смены и шаблоны на месяц\n"
             f"• 📋 <b>Записи:</b> карточки клиентов с референсами и фото исходников\n"
-            f"• ⏱️ <b>Стерилизация:</b> учет 15-минутного буфера\n"
+            f"• ⏱️ <b>Перерыв:</b> автоматический 20-минутный перерыв между клиентами\n"
             f"• 💰 <b>Выручка:</b> расчет планового дохода\n"
             f"• 👁️ <b>Предпросмотр:</b> команда /test для проверки от лица клиента\n\n"
             f"Нажмите кнопку ниже, чтобы открыть нужный раздел:"
@@ -189,7 +189,7 @@ async def command_start_handler(message: Message):
             f"Добро пожаловать в студию ногтевого сервиса <b>Екатерины</b>!\n\n"
             f"У нас действует <b>Умный Конструктор услуг</b>:\n"
             f"1. Выберите этапы (снятие, укрепление, желаемый дизайн и ремонт).\n"
-            f"2. Система автоматически рассчитает точное время работы и буфер стерилизации.\n"
+            f"2. Система автоматически рассчитает точное время работы.\n"
             f"3. Выберите идеально подходящее время и прикрепите фото референса!\n\n"
             f"Нажмите <b>«Записаться»</b>, чтобы открыть Mini App:"
         )
@@ -217,8 +217,8 @@ async def command_settings_handler(message: Message):
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🛠 Открыть Настройки (Mini App)",
-                    web_app=WebAppInfo(url=f"{WEBAPP_URL}?role=master&tab=settings")
+                    text="⚙️ Открыть Настройки (Mini App)",
+                    web_app=WebAppInfo(url=f"{WEBAPP_URL}?view=settings")
                 )
             ]
         ]
@@ -255,7 +255,7 @@ async def command_test_handler(message: Message):
     text = (
         f"👁️ <b>Режим предпросмотра для мастера ({first_name}):</b>\n\n"
         "Вы открываете приложение точно так же, как его видит клиент.\n"
-        "Можно протестировать выбор услуг, подсчет времени и буфера стерилизации, "
+        "Можно протестировать выбор услуг, подсчет времени, "
         "выбор даты и создание записи.\n\n"
         "Нажмите кнопку ниже:"
     )
@@ -543,7 +543,7 @@ async def callback_master_summary(callback: CallbackQuery):
         "📊 <b>Быстрая сводка мастера на сегодня:</b>\n\n"
         "• Рабочие часы: 10:00 — 20:00\n"
         "• Обеденный перерыв: 14:00 — 15:00\n"
-        "• Буфер стерилизации: 15 минут\n\n"
+        "• Перерыв между окнами: 20 минут\n\n"
         "Для детального просмотра записей и настройки шаблона графика на месяц "
         "откройте <b>«⚙️ Кабинет мастера (Mini App)»</b>."
     )

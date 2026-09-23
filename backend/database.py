@@ -138,6 +138,7 @@ def init_and_seed_db():
             # Обновляем существующий конфиг, если в нем еще дефолтная Москва
             cfg = db.query(GlobalConfig).first()
             if cfg:
+                cfg.default_sterilization_buffer = 20
                 if not cfg.city:
                     cfg.city = "Екатеринбург"
                 if not cfg.timezone:
@@ -288,9 +289,31 @@ def init_and_seed_db():
             ]
             db.add_all(services_data)
             db.commit()
+        else:
+            # Корректировка порядка сортировки, если услуга базы улетела в начало
+            base_services = (
+                db.query(Service)
+                .filter(Service.category == ServiceCategory.BASE)
+                .all()
+            )
+            for srv in base_services:
+                if srv.name.strip() == "-":
+                    srv.sort_order = 10
+                elif srv.price == 3400.0 or "длина до 10" in srv.name:
+                    # Наращивание за 3400 всегда в конце базовых услуг
+                    srv.sort_order = 19
+                elif srv.sort_order < 10:
+                    # Если sort_order был выставлен по ошибке меньше 10
+                    srv.sort_order = 15
+            db.commit()
 
         # 3. Создаем расписание мастера на ближайшие 14 дней
         today = date.today()
+        # Обновляем буфер до 20 минут в существующих расписаниях
+        db.query(MasterSchedule).filter(MasterSchedule.sterilization_buffer_minutes == 15).update(
+            {"sterilization_buffer_minutes": 20}
+        )
+
         for offset in range(14):
             day = today + timedelta(days=offset)
             existing_schedule = db.query(MasterSchedule).filter(
@@ -309,7 +332,7 @@ def init_and_seed_db():
                     end_time=time(20, 0),
                     break_start=time(14, 0) if not is_off else None,
                     break_end=time(15, 0) if not is_off else None,
-                    sterilization_buffer_minutes=15,
+                    sterilization_buffer_minutes=20,
                 )
                 db.add(new_sched)
 

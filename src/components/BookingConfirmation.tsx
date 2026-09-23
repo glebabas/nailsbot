@@ -13,7 +13,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { BookingState, CategorizedServices, Service } from '../types';
-import { calculateTiming } from '../services/api';
+import { api, calculateTiming } from '../services/api';
 import { triggerHaptic } from '../utils/telegram';
 
 interface BookingConfirmationProps {
@@ -35,6 +35,16 @@ export const BookingConfirmation: React.FC<BookingConfirmationProps> = ({
   onClientNameChange,
   onClientPhoneChange,
 }) => {
+  const [studioAddress, setStudioAddress] = useState('г. Екатеринбург, ул. Викулова 78, кв. 300');
+
+  useEffect(() => {
+    api.getStudioConfig().then((cfg) => {
+      if (cfg?.studio_address) {
+        setStudioAddress(cfg.studio_address);
+      }
+    });
+  }, []);
+
   const updateName = (name: string) => {
     if (onClientNameChange) onClientNameChange(name);
     if (onUpdateClientInfo) onUpdateClientInfo(name, booking.clientPhone);
@@ -62,7 +72,7 @@ export const BookingConfirmation: React.FC<BookingConfirmationProps> = ({
   ].filter((id): id is number => id !== null);
 
   const chosenServices = allServices.filter((s) => selectedIds.includes(s.id));
-  const timing = calculateTiming(selectedIds);
+  const timing = calculateTiming(selectedIds, allServices);
 
   const formatDuration = (mins: number) => {
     const hours = Math.floor(mins / 60);
@@ -132,12 +142,12 @@ export const BookingConfirmation: React.FC<BookingConfirmationProps> = ({
             <span>Длительность: {formatDuration(timing.servicesDurationMinutes)}</span>
           </div>
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-            <span className="text-emerald-300">+15 мин стерилизация</span>
+            <span className="text-stone-400 font-medium">Стоимость:</span>
+            <span className="text-rose-300 font-bold">{timing.totalPrice.toLocaleString('ru-RU')} ₽</span>
           </div>
           <div className="flex items-center gap-2 col-span-2">
             <MapPin className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-            <span>Москва, ул. Арбат 10, студия 402</span>
+            <span>{studioAddress}</span>
           </div>
         </div>
       </div>

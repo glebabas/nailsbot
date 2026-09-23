@@ -130,9 +130,9 @@ class MasterSchedule(Base):
     break_start: Mapped[Optional[time]] = mapped_column(Time, nullable=True, comment="Начало обеденного перерыва")
     break_end: Mapped[Optional[time]] = mapped_column(Time, nullable=True, comment="Окончание обеденного перерыва")
     
-    # Буфер на стерилизацию и проветривание кабинета
+    # Перерыв между записями мастера
     sterilization_buffer_minutes: Mapped[int] = mapped_column(
-        Integer, default=15, nullable=False, comment="Буфер на стерилизацию между клиентами (мин)"
+        Integer, default=20, nullable=False, comment="Перерыв между клиентами (мин)"
     )
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -155,8 +155,8 @@ class Appointment(Base):
     
     # Рассчитанные агрегаты
     total_procedure_minutes: Mapped[int] = mapped_column(Integer, nullable=False, comment="Чистое время услуг")
-    sterilization_buffer_minutes: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
-    total_duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False, comment="Процедура + стерилизация")
+    sterilization_buffer_minutes: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    total_duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False, comment="Процедура + перерыв")
     total_price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     
     status: Mapped[AppointmentStatus] = mapped_column(
@@ -221,7 +221,7 @@ class GlobalConfig(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     master_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, unique=True)
     
-    default_sterilization_buffer: Mapped[int] = mapped_column(Integer, default=15, nullable=False)
+    default_sterilization_buffer: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
     auto_cancel_hours_before: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
     reminder_first_hours_before: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
     reminder_second_hours_before: Mapped[int] = mapped_column(Integer, default=12, nullable=False)

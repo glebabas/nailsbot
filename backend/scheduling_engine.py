@@ -78,7 +78,7 @@ class SmartSchedulingEngine:
     клиент выбирает все этапы -> система считает точное время -> предлагает только подходящие окна.
     """
 
-    DEFAULT_STERILIZATION_BUFFER = 15  # минут на обработку инструментов и дезинфекцию
+    DEFAULT_STERILIZATION_BUFFER = 20  # минут на перерыв между записями
     SLOT_STEP_MINUTES = 15             # шаг сетки слотов (каждые 15 минут)
 
     @classmethod
