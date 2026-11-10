@@ -489,10 +489,7 @@ const RAW_API_BASE_URL = ((import.meta as any).env?.VITE_API_URL as string | und
 export const API_BASE_URL = RAW_API_BASE_URL.replace(/\/$/, '');
 
 export const buildApiUrl = (endpoint: string): string => {
-  if (API_BASE_URL) {
-    return `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
-  }
-  return endpoint;
+  return endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
 };
 
 export const api = {

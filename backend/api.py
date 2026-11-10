@@ -91,7 +91,7 @@ def trigger_waitlist_for_date(db: Session, target_date: date, background_tasks: 
         .first()
     )
     if wl_entry and wl_entry.client and wl_entry.client.tg_id:
-        webapp_url = os.getenv("WEBAPP_URL", "https://app.glebabas.abrdns.com:8443")
+        webapp_url = os.getenv("WEBAPP_URL", "https://77.105.137.120:8444")
         background_tasks.add_task(
             notify_waitlist_slot_available,
             client_tg_id=wl_entry.client.tg_id,

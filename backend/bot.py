@@ -30,6 +30,7 @@ from aiogram.types import (
     ReplyKeyboardMarkup,
     KeyboardButton,
     WebAppInfo,
+    MenuButtonWebApp,
 )
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
@@ -48,8 +49,8 @@ logger = logging.getLogger("nail_master_bot")
 
 # Конфигурация из переменных окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8830834734:AAEFCB2GbJxmkYDvYlBAkqQuAfwHfukiOXQ")
-WEBAPP_URL = os.getenv("WEBAPP_URL", "https://foyer-purging-superbowl.ngrok-free")
-MASTER_USERNAME = os.getenv("MASTER_USERNAME", "wrhal").lstrip("@")
+WEBAPP_URL = os.getenv("WEBAPP_URL", "https://77.105.137.120:8444")
+MASTER_USERNAME = os.getenv("MASTER_USERNAME", "glebabas1").lstrip("@")
 
 # Список Telegram ID мастеров и администраторов
 MASTER_TG_IDS = set(get_master_tg_ids())
@@ -1111,6 +1112,15 @@ async def start_bot():
     logger.info("Бот запущен. Очистка старых вебхуков и ожидание событий Telegram...")
     try:
         await bot.delete_webhook(drop_pending_updates=True)
+        try:
+            await bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="💅 Записаться",
+                    web_app=WebAppInfo(url=f"{WEBAPP_URL}?role=client"),
+                )
+            )
+        except Exception as menu_err:
+            logger.warning(f"Не удалось обновить MenuButton: {menu_err}")
         await dp.start_polling(bot)
     finally:
         scheduler_task.cancel()
