@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { BookingState, CategorizedServices, Service } from '../types';
 import { api, calculateTiming } from '../services/api';
-import { triggerHaptic } from '../utils/telegram';
+import { triggerHaptic, formatRuDate } from '../utils/telegram';
 
 interface BookingConfirmationProps {
   booking: BookingState;
@@ -35,22 +35,31 @@ export const BookingConfirmation: React.FC<BookingConfirmationProps> = ({
   onClientNameChange,
   onClientPhoneChange,
 }) => {
-  const [studioAddress, setStudioAddress] = useState('г. Екатеринбург, ул. Викулова 78, кв. 300');
+  const [studioAddress, setStudioAddress] = useState('г. Екатеринбург, ул. Викулова 78');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     api.getStudioConfig().then((cfg) => {
       if (cfg?.studio_address) {
-        setStudioAddress(cfg.studio_address);
+        const cab = cfg.studio_cabinet?.trim();
+        const addr = cfg.studio_address.trim();
+        if (cab && !addr.toLowerCase().includes(cab.toLowerCase())) {
+          setStudioAddress(`${addr}, каб. ${cab}`);
+        } else {
+          setStudioAddress(addr);
+        }
       }
     });
   }, []);
 
   const updateName = (name: string) => {
+    setErrorMsg(null);
     if (onClientNameChange) onClientNameChange(name);
     if (onUpdateClientInfo) onUpdateClientInfo(name, booking.clientPhone);
   };
 
   const updatePhone = (phone: string) => {
+    setErrorMsg(null);
     if (onClientPhoneChange) onClientPhoneChange(phone);
     if (onUpdateClientInfo) onUpdateClientInfo(booking.clientName, phone);
   };
@@ -83,10 +92,30 @@ export const BookingConfirmation: React.FC<BookingConfirmationProps> = ({
   };
 
   const handleFinalSubmit = async () => {
+    setErrorMsg(null);
+    const trimmedName = (booking.clientName || '').trim();
+    const trimmedPhone = (booking.clientPhone || '').trim();
+
+    if (!trimmedName) {
+      triggerHaptic('error');
+      setErrorMsg('Пожалуйста, укажите ваше имя');
+      return;
+    }
+
+    try {
+      localStorage.setItem('nail_client_name', trimmedName);
+      if (trimmedPhone) {
+        localStorage.setItem('nail_client_phone', trimmedPhone);
+      }
+    } catch {}
+
     setSubmitting(true);
     triggerHaptic('medium');
     try {
       await onConfirm();
+    } catch (err: any) {
+      triggerHaptic('error');
+      setErrorMsg(err?.message || 'Не удалось создать запись. Проверьте выбранное время и попробуйте снова.');
     } finally {
       setSubmitting(false);
     }
@@ -125,7 +154,7 @@ export const BookingConfirmation: React.FC<BookingConfirmationProps> = ({
               Дата и время визита
             </span>
             <h3 className="text-lg font-bold text-white">
-              {booking.targetDate} в {booking.selectedSlot?.start_time}
+              {formatRuDate(booking.targetDate)} в {booking.selectedSlot?.start_time}
             </h3>
           </div>
           <div className="text-right">
@@ -270,6 +299,13 @@ export const BookingConfirmation: React.FC<BookingConfirmationProps> = ({
       </section>
 
       {/* Важное уведомление о правилах подтверждения */}
+      {errorMsg && (
+        <div className="bg-rose-50 border border-rose-200 p-3 rounded-2xl text-xs text-rose-800 font-medium flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
       <div className="bg-amber-50/80 border border-amber-200/80 p-3 rounded-2xl text-xs space-y-1.5">
         <div className="flex items-center gap-1.5 text-amber-800 font-semibold">
           <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />

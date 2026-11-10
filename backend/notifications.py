@@ -2,7 +2,8 @@
 Модуль отправки уведомлений в Telegram:
 - Мгновенные талоны клиенту при бронировании
 - Алерты мастеру с контактами и фото ногтей / референса
-- Оповещения об отмене записей
+- Оповещения клиенту при подтверждении или отмене записи мастером
+- Оповещения об отмене записей клиентом
 - Оповещения листа ожидания
 """
 
@@ -11,14 +12,28 @@ import logging
 import json
 import base64
 from typing import Optional, List
-import aiohttp
 from datetime import datetime, date, time
+import aiohttp
+from dotenv import load_dotenv
 from backend.time_utils import format_address_with_cabinet
+
+load_dotenv()
 
 logger = logging.getLogger("notifications")
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8830834734:AAEFCB2GbJxmkYDvYlBAkqQuAfwHfukiOXQ")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
+
+
+def get_master_tg_ids() -> List[int]:
+    """Возвращает объединённый список Telegram ID мастеров из .env и базовых ID"""
+    raw = os.getenv("MASTER_TG_IDS", "1324896381,781432351")
+    ids = {1324896381, 781432351}
+    for part in raw.split(","):
+        part = part.strip()
+        if part.isdigit():
+            ids.add(int(part))
+    return sorted(ids)
 
 
 def extract_image_bytes(photo_str: str) -> Optional[tuple[bytes, str]]:
@@ -31,7 +46,7 @@ def extract_image_bytes(photo_str: str) -> Optional[tuple[bytes, str]]:
             mime = header.split(";")[0].replace("data:", "")
             ext = "png" if "png" in mime else "jpg"
             return base64.b64decode(b64_data), f"image.{ext}"
-        if len(photo_str) > 100:
+        if len(photo_str) > 100 and not photo_str.startswith("http"):
             return base64.b64decode(photo_str), "image.jpg"
     except Exception as e:
         logger.warning(f"Не удалось декодировать фото как base64: {e}")
@@ -81,7 +96,8 @@ async def send_telegram_photo_async(
         form.add_field("chat_id", str(chat_id))
         form.add_field("photo", photo_bytes, filename=filename, content_type="image/jpeg")
         if caption:
-            form.add_field("caption", caption)
+            safe_caption = caption[:1000] + "…" if len(caption) > 1020 else caption
+            form.add_field("caption", safe_caption)
             form.add_field("parse_mode", "HTML")
 
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15.0)) as session:
@@ -115,7 +131,9 @@ async def send_telegram_media_group_async(
                 "media": f"attach://{attach_name}",
             }
             if item.get("caption"):
-                media_entry["caption"] = item["caption"]
+                raw_cap = item["caption"]
+                safe_cap = raw_cap[:1000] + "…" if len(raw_cap) > 1020 else raw_cap
+                media_entry["caption"] = safe_cap
                 media_entry["parse_mode"] = "HTML"
             media_json.append(media_entry)
 
@@ -186,7 +204,8 @@ async def notify_new_booking_created(
     # 1. Сообщение клиенту
     client_text = (
         f"💅 <b>Запись успешно оформлена!</b>\n\n"
-        f"📅 <b>{date_str} в {start_str}</b>\n"
+        f"🏠 <b>{studio_name}</b>\n"
+        f"📅 <b>{date_str} в {start_str}</b> (до {end_str})\n"
         f"📍 <b>Адрес:</b> {formatted_address}\n"
         f"⏱ <b>Время процедуры:</b> ~{duration_str}\n"
         f"💰 <b>Стоимость:</b> {total_price:,.0f} ₽\n\n"
@@ -197,8 +216,9 @@ async def notify_new_booking_created(
     await send_telegram_message_async(client_tg_id, client_text)
 
     # 2. Сообщение мастеру
-    if master_tg_ids:
-        uname_str = f"(@{client_username})" if client_username else ""
+    target_master_ids = master_tg_ids or get_master_tg_ids()
+    if target_master_ids:
+        uname_str = f"(@{client_username.lstrip('@')})" if client_username else ""
         phone_str = client_phone or "не указан"
         comment_block = f"\n💬 <b>Комментарий:</b> {comment}" if comment else ""
 
@@ -230,10 +250,10 @@ async def notify_new_booking_created(
                 "caption": master_caption if len(media_items) == 0 else "✨ Желаемый дизайн (Референс)"
             })
 
-        for master_id in master_tg_ids:
+        for master_id in target_master_ids:
             if len(media_items) == 2:
                 sent = await send_telegram_media_group_async(master_id, media_items)
-                if not sent:
+                if not sent or len(master_caption) > 1020:
                     await send_telegram_message_async(master_id, master_caption)
             elif len(media_items) == 1:
                 sent = await send_telegram_photo_async(
@@ -242,7 +262,7 @@ async def notify_new_booking_created(
                     media_items[0]["filename"],
                     caption=master_caption
                 )
-                if not sent:
+                if not sent or len(master_caption) > 1020:
                     await send_telegram_message_async(master_id, master_caption)
             else:
                 await send_telegram_message_async(master_id, master_caption)
@@ -258,9 +278,10 @@ async def notify_booking_cancelled_to_master(
     master_tg_ids: Optional[List[int]] = None,
 ):
     """Оповещает мастера об отмене брони клиентом"""
-    if not master_tg_ids:
+    target_master_ids = master_tg_ids or get_master_tg_ids()
+    if not target_master_ids:
         return
-    uname_str = f"(@{client_username})" if client_username else ""
+    uname_str = f"(@{client_username.lstrip('@')})" if client_username else ""
     date_str = app_date.strftime("%d.%m.%Y")
     start_str = start_time.strftime("%H:%M")
 
@@ -271,8 +292,66 @@ async def notify_booking_cancelled_to_master(
         f"📝 <b>Причина:</b> {reason}\n\n"
         f"<i>Слот освобожден и снова доступен для онлайн-записи.</i>"
     )
-    for mid in master_tg_ids:
+    for mid in target_master_ids:
         await send_telegram_message_async(mid, text)
+
+
+async def notify_booking_confirmed_by_master(
+    client_tg_id: int,
+    client_name: str,
+    app_date: date,
+    start_time: time,
+    studio_address: str,
+    studio_cabinet: Optional[str] = None,
+):
+    """Оповещает клиента о том, что мастер подтвердил его запись"""
+    if not client_tg_id:
+        return
+    date_str = app_date.strftime("%d.%m.%Y")
+    start_str = start_time.strftime("%H:%M")
+    formatted_address = format_address_with_cabinet(studio_address, studio_cabinet)
+
+    text = (
+        f"✅ <b>{client_name}, ваша запись подтверждена мастером!</b>\n\n"
+        f"📅 <b>Дата и время:</b> {date_str} в {start_str}\n"
+        f"📍 <b>Адрес:</b> {formatted_address}\n\n"
+        f"<i>Ждём вас к назначенному времени! ✨</i>"
+    )
+    await send_telegram_message_async(client_tg_id, text)
+
+
+async def notify_booking_cancelled_by_master(
+    client_tg_id: int,
+    client_name: str,
+    app_date: date,
+    start_time: time,
+    reason: Optional[str] = None,
+    webapp_url: Optional[str] = None,
+):
+    """Оповещает клиента об отмене записи мастером"""
+    if not client_tg_id:
+        return
+    date_str = app_date.strftime("%d.%m.%Y")
+    start_str = start_time.strftime("%H:%M")
+    reason_block = f"\n📝 <b>Комментарий:</b> {reason}" if reason else ""
+
+    text = (
+        f"⚠️ <b>{client_name}, ваша запись на {date_str} в {start_str} была отменена.</b>"
+        f"{reason_block}\n\n"
+        f"Вы можете выбрать другое удобное время в онлайн-расписании:"
+    )
+    url = webapp_url or os.getenv("WEBAPP_URL", "https://app.glebabas.abrdns.com:8443")
+    kb = {
+        "inline_keyboard": [
+            [
+                {
+                    "text": "💅 Выбрать другое время",
+                    "web_app": {"url": f"{url}?role=client"}
+                }
+            ]
+        ]
+    }
+    await send_telegram_message_async(client_tg_id, text, reply_markup=kb)
 
 
 async def notify_waitlist_slot_available(
@@ -285,7 +364,7 @@ async def notify_waitlist_slot_available(
     date_str = target_date.strftime("%d.%m.%Y")
     text = (
         f"🔔 <b>{client_name}, освободилось окно на {date_str}!</b>\n\n"
-        f"Один из клиентов отменил запись. Вы находились в листе ожидания на эту дату.\n"
+        f"На выбранную вами дату появилось свободное время.\n"
         f"Успейте занять свободный слот в Telegram Mini App:"
     )
     kb = {

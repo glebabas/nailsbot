@@ -70,13 +70,24 @@ export default function App() {
               <p className="text-[10px] text-stone-500">Панель управления мастера</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => closeTelegramWebApp()}
-            className="text-xs font-semibold text-stone-600 hover:text-stone-900 bg-stone-100 hover:bg-stone-200 px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
-          >
-            Закрыть
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                window.location.search = '?role=master';
+              }}
+              className="text-xs font-semibold text-rose-700 hover:text-rose-900 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
+            >
+              ← Кабинет
+            </button>
+            <button
+              type="button"
+              onClick={() => closeTelegramWebApp()}
+              className="text-xs font-semibold text-stone-600 hover:text-stone-900 bg-stone-100 hover:bg-stone-200 px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
+            >
+              Закрыть
+            </button>
+          </div>
         </header>
         <main className="max-w-md mx-auto px-4 pt-4">
           <MasterSettings />

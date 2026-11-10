@@ -17,8 +17,10 @@ import {
   MonthDaySchedule,
   StudioConfig,
   CityTimezone,
-  ClientAppointment
+  ClientAppointment,
+  WaitlistEntry
 } from '../types';
+import { getLocalDateString } from '../utils/telegram';
 
 // Начальный каталог услуг на русском языке (полностью соответствует backend/database.py)
 export const INITIAL_SERVICES: CategorizedServices = {
@@ -266,7 +268,7 @@ export const getStoredAppointments = (): Appointment[] => {
   }
 
   // Демо-записи для проверки реалистичной занятости мастера
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
   const sampleAppointments: Appointment[] = [
     {
       id: 101,
@@ -279,12 +281,12 @@ export const getStoredAppointments = (): Appointment[] => {
       start_time: '10:00',
       end_time: '12:00',
       total_procedure_minutes: 120,
-      sterilization_buffer_minutes: 15,
-      total_duration_minutes: 135,
-      total_price: 2700,
+      sterilization_buffer_minutes: 20,
+      total_duration_minutes: 140,
+      total_price: 1900,
       status: 'confirmed',
       comment: 'Люблю овальную форму, не срезайте кутикулу слишком глубоко.',
-      services: ['Снятие гель-лака другого мастера', 'Комбинированный маникюр + гель-лак', 'Французский маникюр (Френч / Лунный)'],
+      services: ['снятие покрытия', 'маникюр с покрытием на свои до 1 длины', 'френч любым цветом'],
       created_at: new Date().toISOString(),
     },
     {
@@ -296,14 +298,14 @@ export const getStoredAppointments = (): Appointment[] => {
       master_id: 1,
       date: today,
       start_time: '16:00',
-      end_time: '18:30',
-      total_procedure_minutes: 150,
-      sterilization_buffer_minutes: 15,
-      total_duration_minutes: 165,
-      total_price: 3800,
+      end_time: '18:20',
+      total_procedure_minutes: 140,
+      sterilization_buffer_minutes: 20,
+      total_duration_minutes: 160,
+      total_price: 2400,
       status: 'confirmed',
-      comment: 'Хочу наращивание под нюд и легкий стемпинг.',
-      services: ['Без снятия', 'Наращивание ногтей (длина 1–3)', 'Без дизайна (чистый однотон)'],
+      comment: 'Хочу наращивание под нюд и легкий дизайн.',
+      services: ['без снятия', 'маникюр с наращиванием ногтей длина до 3', 'без дизайна (чистый однотон)'],
       created_at: new Date().toISOString(),
     },
   ];
@@ -347,7 +349,8 @@ export const computeAvailableSlotsLocal = (
   totalDurationWithBuffer: number,
   procedureDuration: number
 ): { slots: AvailableSlot[]; isDayOff: boolean } => {
-  const targetDate = new Date(targetDateStr);
+  const [y, m, d] = targetDateStr.split('-').map(Number);
+  const targetDate = new Date(y, (m || 1) - 1, d || 1);
   const dayOfWeek = targetDate.getDay(); // 0 - воскресенье
 
   const storedSchedule = getStoredSchedule();
@@ -367,8 +370,8 @@ export const computeAvailableSlotsLocal = (
 
   // Часы работы мастера
   const parseTimeToMin = (tStr: string) => {
-    const [h, m] = tStr.split(':').map(Number);
-    return h * 60 + m;
+    const [h, min] = tStr.split(':').map(Number);
+    return h * 60 + min;
   };
 
   const workStart = customDay ? parseTimeToMin(customDay.start_time) : 10 * 60;
@@ -376,12 +379,14 @@ export const computeAvailableSlotsLocal = (
 
   // Обед мастера
   const busyBlocks: { start: number; end: number }[] = [];
-  if (customDay?.break_start && customDay?.break_end) {
-    busyBlocks.push({
-      start: parseTimeToMin(customDay.break_start),
-      end: parseTimeToMin(customDay.break_end),
-    });
-  } else if (!customDay) {
+  if (customDay) {
+    if (customDay.break_start && customDay.break_end) {
+      busyBlocks.push({
+        start: parseTimeToMin(customDay.break_start),
+        end: parseTimeToMin(customDay.break_end),
+      });
+    }
+  } else {
     // Дефолтный обед: 14:00 - 15:00
     busyBlocks.push({ start: 14 * 60, end: 15 * 60 });
   }
@@ -439,7 +444,7 @@ export const computeAvailableSlotsLocal = (
 
   // Ограничение по текущему времени, если запись на сегодня
   const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
+  const todayStr = getLocalDateString(now);
   let minStartM = 0;
   if (targetDateStr === todayStr) {
     minStartM = now.getHours() * 60 + now.getMinutes() + 30; // +30 мин на сборы
@@ -480,26 +485,29 @@ export const computeAvailableSlotsLocal = (
 };
 
 // Настройка базового URL для связи фронтенда с FastAPI backend
-const RAW_API_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) || '';
+const RAW_API_BASE_URL = ((import.meta as any).env?.VITE_API_URL as string | undefined) || '';
 export const API_BASE_URL = RAW_API_BASE_URL.replace(/\/$/, '');
 
 export const buildApiUrl = (endpoint: string): string => {
-  // if (API_BASE_URL) {
-  //   return `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
-  // }
+  if (API_BASE_URL) {
+    return `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+  }
   return endpoint;
 };
 
 export const api = {
-  getServices: async (): Promise<CategorizedServices> => {
-    const url = buildApiUrl('/api/services');
+  getServices: async (includeInactive: boolean = false): Promise<CategorizedServices> => {
+    const query = includeInactive ? '?include_inactive=true' : '';
+    const url = buildApiUrl(`/api/services${query}`);
     try {
       console.log('📡 [API Request] GET', url);
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         console.log('✅ [API Response] Services loaded from backend:', Object.keys(data).length, 'categories');
-        setCachedServices(data);
+        if (!includeInactive) {
+          setCachedServices(data);
+        }
         return data;
       }
       console.warn('⚠️ [API Warning] Backend returned non-ok status for services:', res.status);
@@ -603,8 +611,15 @@ export const api = {
         saveAppointment(created);
         return created;
       }
+      if (res.status === 400 || res.status === 409) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Выбранное время уже занято или недоступно');
+      }
       console.warn('⚠️ [API Warning] Backend appointments status:', res.status);
-    } catch (err) {
+    } catch (err: any) {
+      if (err instanceof Error && (err.message.includes('занято') || err.message.includes('недоступно') || err.message.includes('выходной') || err.message.includes('услуг'))) {
+        throw err;
+      }
       console.warn('⚠️ [API Error] Failed to save appointment to FastAPI backend:', err);
     }
 
@@ -672,9 +687,9 @@ export const api = {
       const isWorking = custom !== undefined ? custom.is_working_day : dayOfWeek !== 6;
       const startTime = custom?.start_time || '10:00';
       const endTime = custom?.end_time || '20:00';
-      const breakStart = custom?.break_start || '14:00';
-      const breakEnd = custom?.break_end || '15:00';
-      const buffer = custom?.sterilization_buffer_minutes || 15;
+      const breakStart = custom !== undefined ? (custom.break_start || '') : '14:00';
+      const breakEnd = custom !== undefined ? (custom.break_end || '') : '15:00';
+      const buffer = custom?.sterilization_buffer_minutes ?? 20;
 
       const dayApps = storedAppointments.filter(
         (a) => a.date === dateStr && a.status !== 'cancelled'
@@ -880,7 +895,7 @@ export const api = {
       city: 'Екатеринбург',
       timezone: 'Asia/Yekaterinburg',
       avatar_url: null,
-      default_sterilization_buffer: 15,
+      default_sterilization_buffer: 20,
     };
   },
 
@@ -1010,8 +1025,8 @@ export const api = {
     return { id: serviceId, ...update } as Service;
   },
 
-  deleteService: async (serviceId: number): Promise<boolean> => {
-    const url = buildApiUrl(`/api/services/${serviceId}`);
+  deleteService: async (serviceId: number, hard: boolean = true): Promise<boolean> => {
+    const url = buildApiUrl(`/api/services/${serviceId}?hard=${hard}`);
     try {
       console.log('📡 [API Request] DELETE', url);
       const res = await fetch(url, { method: 'DELETE' });
@@ -1020,5 +1035,49 @@ export const api = {
       console.warn('⚠️ [API Error] Failed to delete service on backend:', err);
       return true;
     }
+  },
+
+  joinWaitlist: async (params: {
+    tg_id: number;
+    client_name: string;
+    client_phone?: string;
+    client_username?: string;
+    date: string;
+    preferred_time_start?: string;
+    preferred_time_end?: string;
+  }): Promise<{ status: string; id?: number; already_joined?: boolean }> => {
+    const url = buildApiUrl('/api/waitlist');
+    try {
+      console.log('📡 [API Request] POST', url, params);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...params,
+          target_date: params.date,
+        }),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err) {
+      console.warn('⚠️ [API Error] Failed to join waitlist on backend:', err);
+    }
+    return { status: 'ok', id: Date.now(), already_joined: false };
+  },
+
+  getWaitlist: async (dateStr?: string): Promise<WaitlistEntry[]> => {
+    const query = dateStr ? `?target_date=${dateStr}` : '';
+    const url = buildApiUrl(`/api/waitlist${query}`);
+    try {
+      console.log('📡 [API Request] GET', url);
+      const res = await fetch(url);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err) {
+      console.warn('⚠️ [API Error] Failed to fetch waitlist from backend:', err);
+    }
+    return [];
   },
 };

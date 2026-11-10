@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { ClientAppointment } from '../types';
 import { api } from '../services/api';
+import { getLocalDateString } from '../utils/telegram';
 
 interface ClientAppointmentsModalProps {
   isOpen: boolean;
   onClose: () => void;
   tgId?: number;
   onBookNew: () => void;
+  onCountChange?: (count: number) => void;
 }
 
 export const ClientAppointmentsModal: React.FC<ClientAppointmentsModalProps> = ({
@@ -14,6 +16,7 @@ export const ClientAppointmentsModal: React.FC<ClientAppointmentsModalProps> = (
   onClose,
   tgId,
   onBookNew,
+  onCountChange,
 }) => {
   const [appointments, setAppointments] = useState<ClientAppointment[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -25,11 +28,20 @@ export const ClientAppointmentsModal: React.FC<ClientAppointmentsModalProps> = (
 
   const clientId = tgId || (window as any).Telegram?.WebApp?.initDataUnsafe?.user?.id || 1324896381;
 
+  const todayStr = getLocalDateString();
+
   const loadAppointments = async () => {
     setLoading(true);
     try {
       const data = await api.getClientAppointments(clientId);
       setAppointments(data);
+      if (onCountChange) {
+        const upCount = data.filter((a) => {
+          const st = String(a.status || '').toUpperCase();
+          return (st === 'PENDING' || st === 'CONFIRMED') && a.date >= todayStr;
+        }).length;
+        onCountChange(upCount);
+      }
     } catch (err) {
       console.error('Ошибка загрузки записей:', err);
     } finally {
@@ -45,10 +57,10 @@ export const ClientAppointmentsModal: React.FC<ClientAppointmentsModalProps> = (
 
   if (!isOpen) return null;
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const upcoming = appointments.filter(
-    (a) => (a.status === 'PENDING' || a.status === 'CONFIRMED') && a.date >= todayStr
-  );
+  const upcoming = appointments.filter((a) => {
+    const st = String(a.status || '').toUpperCase();
+    return (st === 'PENDING' || st === 'CONFIRMED') && a.date >= todayStr;
+  });
   const history = appointments.filter((a) => !upcoming.includes(a));
 
   const showToast = (msg: string) => {
@@ -84,7 +96,8 @@ export const ClientAppointmentsModal: React.FC<ClientAppointmentsModalProps> = (
   };
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
+    const normalized = String(status || '').toUpperCase();
+    switch (normalized) {
       case 'CONFIRMED':
         return (
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -181,7 +194,7 @@ export const ClientAppointmentsModal: React.FC<ClientAppointmentsModalProps> = (
         {/* Список записей с поддержкой прокрутки */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3.5 custom-scrollbar">
           {toastMessage && (
-            <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 rounded-xl text-emerald-300 text-xs font-medium text-center animate-fade-in">
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-semibold text-center animate-fade-in">
               {toastMessage}
             </div>
           )}

@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { CheckCircle2, Calendar, MapPin, Clock, MessageSquare, Send, Sparkles, User } from 'lucide-react';
 import { Appointment } from '../types';
-import { closeTelegramWebApp, triggerHaptic } from '../utils/telegram';
+import { closeTelegramWebApp, triggerHaptic, formatRuDate } from '../utils/telegram';
+import { api } from '../services/api';
 
 interface SuccessScreenProps {
   appointment: Appointment;
@@ -16,6 +17,26 @@ export const SuccessScreen: React.FC<SuccessScreenProps> = ({
   onNewBooking,
   onOpenMasterView,
 }) => {
+  const [studioName, setStudioName] = useState('Студия маникюра');
+  const [studioAddress, setStudioAddress] = useState('г. Екатеринбург, ул. Викулова 78');
+
+  useEffect(() => {
+    api.getStudioConfig().then((cfg) => {
+      if (cfg?.studio_name) {
+        setStudioName(cfg.studio_name);
+      }
+      if (cfg?.studio_address) {
+        const cab = cfg.studio_cabinet?.trim();
+        const addr = cfg.studio_address.trim();
+        if (cab && !addr.toLowerCase().includes(cab.toLowerCase())) {
+          setStudioAddress(`${addr}, каб. ${cab}`);
+        } else {
+          setStudioAddress(addr);
+        }
+      }
+    });
+  }, []);
+
   const handleReset = () => {
     if (onReset) onReset();
     else if (onNewBooking) onNewBooking();
@@ -32,10 +53,10 @@ export const SuccessScreen: React.FC<SuccessScreenProps> = ({
 
       <div className="space-y-1">
         <span className="text-xs font-semibold uppercase tracking-wider text-rose-600">
-          Запись подтверждена!
+          Запись оформлена!
         </span>
         <h2 className="text-xl font-bold text-stone-900">
-          Ждем вас в Екатерина Nails
+          Ждём вас в {studioName}
         </h2>
         <p className="text-xs text-stone-500 max-w-xs mx-auto">
           Бот уже отправил подтверждение в ваш чат Telegram с деталями процедуры.
@@ -54,7 +75,7 @@ export const SuccessScreen: React.FC<SuccessScreenProps> = ({
         <div className="space-y-2 text-xs">
           <div className="flex items-center gap-2 text-stone-800">
             <Calendar className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-            <span className="font-semibold">{appointment.date}</span>
+            <span className="font-semibold">{formatRuDate(appointment.date)}</span>
           </div>
 
           <div className="flex items-center gap-2 text-stone-800">
@@ -68,7 +89,7 @@ export const SuccessScreen: React.FC<SuccessScreenProps> = ({
 
           <div className="flex items-center gap-2 text-stone-800">
             <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-            <span>Москва, ул. Арбат 10, студия 402</span>
+            <span>{studioAddress}</span>
           </div>
         </div>
 

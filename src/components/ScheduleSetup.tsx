@@ -21,7 +21,7 @@ import {
   MasterScheduleDay,
 } from '../types';
 import { api } from '../services/api';
-import { triggerHaptic } from '../utils/telegram';
+import { triggerHaptic, getLocalDateString } from '../utils/telegram';
 
 interface ScheduleSetupProps {
   masterId?: number;
@@ -41,7 +41,7 @@ export const ScheduleSetup: React.FC<ScheduleSetupProps> = ({
   const [monthData, setMonthData] = useState<MasterMonthOverview | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedDayDate, setSelectedDayDate] = useState<string>(
-    today.toISOString().split('T')[0]
+    getLocalDateString(today)
   );
 
   // Параметры формы шаблона
@@ -51,7 +51,7 @@ export const ScheduleSetup: React.FC<ScheduleSetupProps> = ({
   const [hasLunchBreak, setHasLunchBreak] = useState<boolean>(true);
   const [breakStart, setBreakStart] = useState<string>('14:00');
   const [breakEnd, setBreakEnd] = useState<string>('15:00');
-  const [sterilizationBuffer, setSterilizationBuffer] = useState<number>(15);
+  const [sterilizationBuffer, setSterilizationBuffer] = useState<number>(20);
 
   // Статус сохранения
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
@@ -110,16 +110,21 @@ export const ScheduleSetup: React.FC<ScheduleSetupProps> = ({
   const [dayIsWorking, setDayIsWorking] = useState<boolean>(true);
   const [dayStart, setDayStart] = useState<string>('10:00');
   const [dayEnd, setDayEnd] = useState<string>('20:00');
+  const [dayHasLunchBreak, setDayHasLunchBreak] = useState<boolean>(true);
   const [dayBreakStart, setDayBreakStart] = useState<string>('14:00');
   const [dayBreakEnd, setDayBreakEnd] = useState<string>('15:00');
+  const [dayBuffer, setDayBuffer] = useState<number>(20);
 
   useEffect(() => {
     if (selectedDayInfo) {
       setDayIsWorking(selectedDayInfo.is_working_day);
-      setDayStart(selectedDayInfo.start_time);
-      setDayEnd(selectedDayInfo.end_time);
+      setDayStart(selectedDayInfo.start_time || '10:00');
+      setDayEnd(selectedDayInfo.end_time || '20:00');
+      const hasBreak = Boolean(selectedDayInfo.break_start && selectedDayInfo.break_end);
+      setDayHasLunchBreak(hasBreak);
       setDayBreakStart(selectedDayInfo.break_start || '14:00');
       setDayBreakEnd(selectedDayInfo.break_end || '15:00');
+      setDayBuffer(selectedDayInfo.sterilization_buffer_minutes || 20);
     }
   }, [selectedDayInfo]);
 
@@ -131,9 +136,9 @@ export const ScheduleSetup: React.FC<ScheduleSetupProps> = ({
       is_working_day: dayIsWorking,
       start_time: dayStart,
       end_time: dayEnd,
-      break_start: hasLunchBreak ? dayBreakStart : undefined,
-      break_end: hasLunchBreak ? dayBreakEnd : undefined,
-      sterilization_buffer_minutes: sterilizationBuffer,
+      break_start: dayHasLunchBreak ? dayBreakStart : undefined,
+      break_end: dayHasLunchBreak ? dayBreakEnd : undefined,
+      sterilization_buffer_minutes: dayBuffer,
     };
 
     await api.setDaySchedule(masterId, payload);
@@ -156,9 +161,9 @@ export const ScheduleSetup: React.FC<ScheduleSetupProps> = ({
         is_working_day: true,
         start_time: dayStart,
         end_time: dayEnd,
-        break_start: hasLunchBreak ? dayBreakStart : undefined,
-        break_end: hasLunchBreak ? dayBreakEnd : undefined,
-        sterilization_buffer_minutes: sterilizationBuffer,
+        break_start: dayHasLunchBreak ? dayBreakStart : undefined,
+        break_end: dayHasLunchBreak ? dayBreakEnd : undefined,
+        sterilization_buffer_minutes: dayBuffer,
       });
     }
 
@@ -433,15 +438,15 @@ export const ScheduleSetup: React.FC<ScheduleSetupProps> = ({
                   <label className="flex items-center gap-1.5 text-[11px] text-amber-900 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={hasLunchBreak}
-                      onChange={(e) => setHasLunchBreak(e.target.checked)}
+                      checked={dayHasLunchBreak}
+                      onChange={(e) => setDayHasLunchBreak(e.target.checked)}
                       className="accent-amber-600 rounded"
                     />
                     <span>Включить</span>
                   </label>
                 </div>
 
-                {hasLunchBreak && (
+                {dayHasLunchBreak && (
                   <div className="grid grid-cols-2 gap-2 pt-1">
                     <div>
                       <span className="text-[10px] text-amber-700 block mb-0.5">С</span>
@@ -472,13 +477,13 @@ export const ScheduleSetup: React.FC<ScheduleSetupProps> = ({
                   Стерилизация между клиентами:
                 </span>
                 <select
-                  value={sterilizationBuffer}
-                  onChange={(e) => setSterilizationBuffer(Number(e.target.value))}
+                  value={dayBuffer}
+                  onChange={(e) => setDayBuffer(Number(e.target.value))}
                   className="bg-stone-50 border border-stone-200 rounded-lg px-2 py-1 text-xs font-semibold text-stone-800"
                 >
                   <option value={10}>10 мин</option>
-                  <option value={15}>15 мин (стандарт)</option>
-                  <option value={20}>20 мин</option>
+                  <option value={15}>15 мин</option>
+                  <option value={20}>20 мин (стандарт)</option>
                   <option value={30}>30 мин</option>
                 </select>
               </div>

@@ -208,3 +208,28 @@ export const closeTelegramWebApp = () => {
     console.log('[Telegram WebApp] Запрос на закрытие окна');
   }
 };
+
+/**
+ * Возвращает локальную дату в формате YYYY-MM-DD без сдвига в UTC.
+ */
+export const getLocalDateString = (d: Date = new Date()): string => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+/**
+ * Форматирует строку YYYY-MM-DD в читаемый вид на русском (например, "16 сентября 2026").
+ */
+export const formatRuDate = (dateStr: string): string => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const [y, m, d] = parts.map(Number);
+  const months = [
+    'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+    'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+  ];
+  return `${d} ${months[(m - 1) % 12] || ''} ${y}`;
+};

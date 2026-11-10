@@ -7,7 +7,7 @@ Pydantic-схемы валидации запросов и ответов для
 import datetime as dt
 from datetime import date, time, datetime
 from typing import List, Optional, Dict
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from backend.models import ServiceCategory, AppointmentStatus, UserRole
 
 
@@ -24,8 +24,7 @@ class ServiceResponse(BaseModel):
     is_active: bool
     sort_order: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CategorizedServicesResponse(BaseModel):
@@ -41,7 +40,7 @@ class CategorizedServicesResponse(BaseModel):
 # ==========================================
 class SlotsRequest(BaseModel):
     """Запрос на расчёт доступных слотов"""
-    master_id: int = Field(..., description="ID мастера маникюра")
+    master_id: int = Field(1, description="ID мастера маникюра")
     target_date: date = Field(..., description="Выбранная дата записи (YYYY-MM-DD)")
     service_ids: List[int] = Field(..., min_length=1, description="Список ID выбранных услуг из конструктора")
 
@@ -74,9 +73,9 @@ class SlotsResponse(BaseModel):
 # ==========================================
 class AppointmentCreateRequest(BaseModel):
     """Создание бронирования из Mini App"""
-    master_id: int = Field(..., description="ID мастера")
+    master_id: int = Field(1, description="ID мастера")
     tg_id: int = Field(..., description="Telegram ID клиента")
-    client_name: str = Field(..., min_length=2, description="Имя клиента для контакта")
+    client_name: str = Field(..., min_length=1, description="Имя клиента для контакта")
     client_phone: Optional[str] = Field(None, description="Контактный номер телефона")
     client_username: Optional[str] = Field(None, description="Telegram username без @")
     
@@ -115,8 +114,7 @@ class AppointmentResponse(BaseModel):
     services: List[str]
     created_at: dt.datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ==========================================
@@ -129,13 +127,13 @@ class ScheduleDaySetting(BaseModel):
     end_time: str = "20:00"
     break_start: Optional[str] = "14:00"
     break_end: Optional[str] = "15:00"
-    sterilization_buffer_minutes: int = 15
+    sterilization_buffer_minutes: int = 20
 
 
 class ScheduleTemplateApplyRequest(BaseModel):
     """Применение шаблона расписания на месяц"""
-    master_id: int = Field(..., description="ID мастера")
-    month: str = Field(..., description="Месяц в формате YYYY-MM (например, '2026-09')")
+    master_id: int = Field(1, description="ID мастера")
+    month: str = Field(..., description="Месяц в формате YYYY-MM (например, '2026-11')")
     pattern: str = Field("5_2", description="Шаблон смен: '2_2', '5_2', 'all', 'custom'")
     start_time: str = Field("10:00", description="Время начала рабочего дня (HH:MM)")
     end_time: str = Field("20:00", description="Время окончания рабочего дня (HH:MM)")
@@ -187,7 +185,7 @@ class MasterMonthDaySummary(BaseModel):
 
 class MasterMonthOverviewResponse(BaseModel):
     master_id: int
-    month: str # "2026-09"
+    month: str # "2026-11"
     days: List[MasterMonthDaySummary]
     total_working_days: int
     total_appointments: int
@@ -205,10 +203,9 @@ class StudioConfigResponse(BaseModel):
     timezone: str = "Asia/Yekaterinburg"
     avatar_url: Optional[str] = None
     preparation_instructions: Optional[str] = None
-    default_sterilization_buffer: int = 15
+    default_sterilization_buffer: int = 20
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class StudioConfigUpdateRequest(BaseModel):
@@ -260,12 +257,42 @@ class ClientAppointmentItem(BaseModel):
     photo_ref: Optional[str] = None
     can_cancel: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ClientCancelRequest(BaseModel):
     reason: Optional[str] = "Отменено клиентом"
 
 
+# ==========================================
+# 6. ЛИСТ ОЖИДАНИЯ (WAITLIST)
+# ==========================================
+class WaitlistCreateRequest(BaseModel):
+    master_id: int = 1
+    tg_id: int
+    client_name: str = "Клиент"
+    client_phone: Optional[str] = None
+    client_username: Optional[str] = None
+    target_date: Optional[dt.date] = None
+    date: Optional[dt.date] = None
+    service_ids: List[int] = Field(default_factory=list)
+    required_duration_minutes: Optional[int] = None
+    preferred_time_from: Optional[str] = None
+    preferred_time_to: Optional[str] = None
 
+
+class WaitlistResponse(BaseModel):
+    id: int
+    client_id: int
+    client_name: str
+    client_phone: Optional[str] = None
+    client_username: Optional[str] = None
+    master_id: int
+    date: str
+    required_duration_minutes: int
+    preferred_time_from: Optional[str] = None
+    preferred_time_to: Optional[str] = None
+    is_notified: bool
+    created_at: dt.datetime
+
+    model_config = ConfigDict(from_attributes=True)

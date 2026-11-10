@@ -152,7 +152,7 @@ export interface ClientAppointment {
   total_procedure_minutes: number;
   total_duration_minutes: number;
   total_price: number;
-  status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
+  status: AppointmentStatus | 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
   services: string[];
   studio_name: string;
   studio_address: string;
@@ -162,6 +162,20 @@ export interface ClientAppointment {
   photo_ref?: string | null;
   can_cancel: boolean;
 }
+
+export interface WaitlistEntry {
+  id: number;
+  client_id: number;
+  client_name: string;
+  client_phone?: string | null;
+  client_username?: string | null;
+  date: string;
+  preferred_time_start?: string | null;
+  preferred_time_end?: string | null;
+  is_notified: boolean;
+  created_at: string;
+}
+
 
 
 

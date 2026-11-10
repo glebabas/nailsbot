@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, Sparkles, ShieldCheck, ArrowLeft, AlertCircle, BellRing, Check } from 'lucide-react';
 import { AvailableSlot, CalculatedTiming, CategorizedServices } from '../types';
 import { api } from '../services/api';
-import { triggerHaptic } from '../utils/telegram';
+import { triggerHaptic, getTelegramUser, getLocalDateString, formatRuDate } from '../utils/telegram';
 
 interface SlotSelectorProps {
   selectedServiceIds: number[];
@@ -30,8 +30,9 @@ export const SlotSelector: React.FC<SlotSelectorProps> = ({
   onProceedToPhotos,
   onProceed,
 }) => {
-  const selectedDate = propSelectedDate || targetDate || new Date().toISOString().split('T')[0];
+  const selectedDate = propSelectedDate || targetDate || getLocalDateString();
   const handleDateSelection = (d: string) => {
+    setWaitlistJoined(false);
     if (onSelectDate) onSelectDate(d);
     if (onDateChange) onDateChange(d);
   };
@@ -44,6 +45,7 @@ export const SlotSelector: React.FC<SlotSelectorProps> = ({
   const [isDayOff, setIsDayOff] = useState<boolean>(false);
   const [timing, setTiming] = useState<CalculatedTiming | null>(null);
   const [waitlistJoined, setWaitlistJoined] = useState<boolean>(false);
+  const [waitlistLoading, setWaitlistLoading] = useState<boolean>(false);
 
   // Генерация ближайших 14 дней для горизонтальной ленты
   const datesList = React.useMemo(() => {
@@ -161,7 +163,7 @@ export const SlotSelector: React.FC<SlotSelectorProps> = ({
             Выберите дату визита
           </h3>
           <span className="text-[11px] text-stone-500">
-            {datesList.find((d) => d.dateStr === selectedDate)?.monthStr}. 2026
+            {datesList.find((d) => d.dateStr === selectedDate)?.monthStr}. {selectedDate.split('-')[0]}
           </span>
         </div>
 
@@ -265,15 +267,33 @@ export const SlotSelector: React.FC<SlotSelectorProps> = ({
             <button
               id="btn-join-waitlist"
               type="button"
-              onClick={() => {
+              disabled={waitlistJoined || waitlistLoading}
+              onClick={async () => {
+                if (waitlistJoined || waitlistLoading) return;
                 triggerHaptic('success');
-                setWaitlistJoined(true);
+                setWaitlistLoading(true);
+                const tgUser = getTelegramUser();
+                try {
+                  await api.joinWaitlist({
+                    tg_id: tgUser.id,
+                    client_name: tgUser.firstName || 'Клиент',
+                    client_username: tgUser.username || undefined,
+                    date: selectedDate,
+                  });
+                  setWaitlistJoined(true);
+                } finally {
+                  setWaitlistLoading(false);
+                }
               }}
-              className="w-full py-2.5 px-3 rounded-xl bg-stone-900 text-white text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-stone-800 transition-colors cursor-pointer"
+              className="w-full py-2.5 px-3 rounded-xl bg-stone-900 text-white text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-stone-800 transition-colors cursor-pointer disabled:opacity-75"
             >
               <BellRing className="w-3.5 h-3.5 text-amber-400" />
               <span>
-                {waitlistJoined ? '✓ Вы в листе ожидания на этот день!' : 'Встать в лист ожидания (T-8h отмены)'}
+                {waitlistLoading
+                  ? 'Добавляем в лист ожидания...'
+                  : waitlistJoined
+                  ? '✓ Вы в листе ожидания на этот день!'
+                  : 'Встать в лист ожидания (при освобождении слота)'}
               </span>
             </button>
             {waitlistJoined && (
@@ -431,7 +451,7 @@ export const SlotSelector: React.FC<SlotSelectorProps> = ({
             </span>
             <span className="text-sm font-bold text-stone-900">
               {selectedSlot
-                ? `${selectedDate} в ${selectedSlot.start_time}`
+                ? `${formatRuDate(selectedDate)} в ${selectedSlot.start_time}`
                 : 'Время не выбрано'}
             </span>
           </div>

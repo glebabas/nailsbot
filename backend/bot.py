@@ -16,6 +16,9 @@ import logging
 import asyncio
 from typing import Optional, List
 from datetime import datetime, date, time, timedelta
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.filters import CommandStart, Command
@@ -32,9 +35,9 @@ from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 
 from backend.database import SessionLocal
-from backend.models import Appointment, AppointmentStatus, User, UserRole, GlobalConfig, WaitlistEntry
+from backend.models import Appointment, AppointmentStatus, User, UserRole, GlobalConfig, WaitlistEntry, MasterSchedule
 from backend.time_utils import get_local_naive_now, format_address_with_cabinet
-from backend.notifications import notify_waitlist_slot_available
+from backend.notifications import notify_waitlist_slot_available, get_master_tg_ids
 
 # Логирование
 logging.basicConfig(
@@ -49,17 +52,14 @@ WEBAPP_URL = os.getenv("WEBAPP_URL", "https://foyer-purging-superbowl.ngrok-free
 MASTER_USERNAME = os.getenv("MASTER_USERNAME", "wrhal").lstrip("@")
 
 # Список Telegram ID мастеров и администраторов
-# Мастер по умолчанию (ID можно переопределить через env MASTER_TG_ID)
-MASTER_TG_IDS = set(
-    int(x.strip()) for x in os.getenv("MASTER_TG_IDS", "1324896381,781432351").split(",") if x.strip()
-)
+MASTER_TG_IDS = set(get_master_tg_ids())
 
 router = Router(name="main_router")
 
 
 def is_master_user(tg_id: int) -> bool:
     """Проверка, является ли пользователь мастером/админом"""
-    return tg_id in MASTER_TG_IDS
+    return tg_id in MASTER_TG_IDS or tg_id in get_master_tg_ids()
 
 
 def get_client_keyboard(webapp_url: str, master_username: str) -> InlineKeyboardMarkup:
@@ -184,11 +184,20 @@ async def command_start_handler(message: Message):
         keyboard = get_master_keyboard(WEBAPP_URL, MASTER_USERNAME)
     else:
         # Меню клиента
+        studio_title = "студию ногтевого сервиса"
+        db = SessionLocal()
+        try:
+            conf = db.query(GlobalConfig).first()
+            if conf and conf.studio_name:
+                studio_title = f"<b>{conf.studio_name}</b>"
+        finally:
+            db.close()
+
         text = (
             f"Здравствуйте, {first_name}! 💅\n\n"
-            f"Добро пожаловать в студию ногтевого сервиса <b>Екатерины</b>!\n\n"
+            f"Добро пожаловать в {studio_title}!\n\n"
             f"У нас действует <b>Умный Конструктор услуг</b>:\n"
-            f"1. Выберите этапы (снятие, укрепление, желаемый дизайн и ремонт).\n"
+            f"1. Выберите этапы (снятие, покрытие/наращивание, дизайн и ремонт).\n"
             f"2. Система автоматически рассчитает точное время работы.\n"
             f"3. Выберите идеально подходящее время и прикрепите фото референса!\n\n"
             f"Нажмите <b>«Записаться»</b>, чтобы открыть Mini App:"
@@ -292,7 +301,7 @@ async def command_help_handler(message: Message):
         "<b>Справка по онлайн-записи:</b>\n\n"
         "✨ <b>Как работает динамический расчет?</b>\n"
         "Каждая процедура состоит из этапов: снятие старого материала, маникюр с выравниванием, дизайн и ремонт. "
-        "Система на лету суммирует точное время каждого этапа и закладывает 15 минут на дезинфекцию и сушку инструментов. "
+        "Система на лету суммирует точное время каждого этапа и закладывает 20 минут на дезинфекцию и сушку инструментов. "
         "Вам показываются только те окна, в которые процедура гарантированно поместится!\n\n"
         "📸 <b>Зачем нужны фотографии?</b>\n"
         "Фото исходника помогает мастеру заранее оценить сложность кутикулы и длину, а референс — подготовить нужные материалы.\n\n"
@@ -360,7 +369,8 @@ async def send_client_appointments(bot: Bot, chat_id: int, tg_id: int):
             await bot.send_message(chat_id, text, reply_markup=kb, parse_mode=ParseMode.HTML)
             return
 
-        today = date.today()
+        tz_name = conf.timezone if conf and conf.timezone else "Asia/Yekaterinburg"
+        today = get_local_naive_now(tz_name).date()
         upcoming = [a for a in apps if a.date >= today and a.status in (AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED)]
         past = [a for a in apps if a not in upcoming]
 
@@ -539,15 +549,60 @@ async def callback_master_summary(callback: CallbackQuery):
         return
 
     await callback.answer()
-    text = (
-        "📊 <b>Быстрая сводка мастера на сегодня:</b>\n\n"
-        "• Рабочие часы: 10:00 — 20:00\n"
-        "• Обеденный перерыв: 14:00 — 15:00\n"
-        "• Перерыв между окнами: 20 минут\n\n"
-        "Для детального просмотра записей и настройки шаблона графика на месяц "
-        "откройте <b>«⚙️ Кабинет мастера (Mini App)»</b>."
-    )
-    await callback.message.answer(text, parse_mode=ParseMode.HTML)
+    db = SessionLocal()
+    try:
+        conf = db.query(GlobalConfig).first()
+        tz_name = conf.timezone if conf and conf.timezone else "Asia/Yekaterinburg"
+        today = get_local_naive_now(tz_name).date()
+
+        sched = db.query(MasterSchedule).filter(MasterSchedule.date == today).first()
+        if sched:
+            is_work = sched.is_working_day
+            work_hours = f"{sched.start_time.strftime('%H:%M')} — {sched.end_time.strftime('%H:%M')}" if is_work else "Выходной"
+            lunch_str = f"{sched.break_start.strftime('%H:%M')} — {sched.break_end.strftime('%H:%M')}" if (sched.break_start and sched.break_end) else "Без обеда"
+            buf_min = sched.sterilization_buffer_minutes or 20
+        else:
+            is_work = today.weekday() != 6
+            work_hours = "10:00 — 20:00" if is_work else "Выходной"
+            lunch_str = "14:00 — 15:00"
+            buf_min = conf.default_sterilization_buffer if conf and conf.default_sterilization_buffer else 20
+
+        today_apps = (
+            db.query(Appointment)
+            .filter(
+                Appointment.date == today,
+                Appointment.status != AppointmentStatus.CANCELLED,
+            )
+            .order_by(Appointment.start_time)
+            .all()
+        )
+        expected_rev = sum(float(a.total_price or 0) for a in today_apps)
+
+        lines = [
+            f"📊 <b>Сводка мастера на сегодня ({today.strftime('%d.%m.%Y')}):</b>\n",
+            f"• <b>Статус смены:</b> {work_hours}",
+            f"• <b>Обеденный перерыв:</b> {lunch_str}",
+            f"• <b>Перерыв между клиентами:</b> {buf_min} мин",
+            f"• <b>Активных записей:</b> {len(today_apps)}",
+            f"• <b>Ожидаемая выручка:</b> {expected_rev:,.0f} ₽\n",
+        ]
+
+        if today_apps:
+            lines.append("📋 <b>Записи на сегодня:</b>")
+            for a in today_apps:
+                st_emoji = "✅" if a.status == AppointmentStatus.CONFIRMED else ("🏁" if a.status == AppointmentStatus.COMPLETED else "⏳")
+                c_name = a.client.first_name if a.client else "Клиент"
+                s_names = ", ".join(s.name for s in a.services) if a.services else "Маникюр"
+                lines.append(
+                    f"{st_emoji} <b>{a.start_time.strftime('%H:%M')}–{a.end_time.strftime('%H:%M')}</b> — {c_name} ({float(a.total_price):,.0f} ₽)\n   <i>{s_names}</i>"
+                )
+        else:
+            lines.append("✨ <i>На сегодня записей пока нет.</i>")
+
+        text = "\n".join(lines)
+        await callback.message.answer(text, parse_mode=ParseMode.HTML)
+    finally:
+        db.close()
 
 
 # =====================================================================
@@ -916,6 +971,29 @@ async def check_and_send_scheduled_events(bot: Bot):
                         await bot.send_message(mid, master_cancel_text, parse_mode=ParseMode.HTML)
                     except Exception:
                         pass
+
+                # Проверяем лист ожидания на освободившуюся дату
+                wl_entry = (
+                    db.query(WaitlistEntry)
+                    .filter(
+                        WaitlistEntry.date == app.date,
+                        WaitlistEntry.is_notified == False,
+                    )
+                    .first()
+                )
+                if wl_entry and wl_entry.client and wl_entry.client.tg_id:
+                    try:
+                        await notify_waitlist_slot_available(
+                            wl_entry.client.tg_id,
+                            wl_entry.client.first_name,
+                            app.date,
+                            WEBAPP_URL,
+                        )
+                        wl_entry.is_notified = True
+                        wl_entry.notified_at = now_dt
+                        db.commit()
+                    except Exception as ex:
+                        logger.warning(f"Ошибка оповещения waitlist при автоотмене: {ex}")
 
             # 4. Напоминание за 2 часа (только подтверждённым)
             elif 0 < hours_to_start <= 2.0 and app.status == AppointmentStatus.CONFIRMED and app.reminder_2h_sent_at is None:

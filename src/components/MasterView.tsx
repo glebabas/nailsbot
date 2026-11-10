@@ -16,18 +16,22 @@ import {
   Filter,
   CalendarDays,
   ListTodo,
+  Settings,
+  Eye,
+  BellRing,
 } from 'lucide-react';
-import { Appointment, StudioConfig } from '../types';
+import { Appointment, StudioConfig, WaitlistEntry } from '../types';
 import { api, getStoredAppointments } from '../services/api';
-import { triggerHaptic, getTelegramUser } from '../utils/telegram';
+import { triggerHaptic, getTelegramUser, getLocalDateString } from '../utils/telegram';
 import { ScheduleSetup } from './ScheduleSetup';
+import { MasterSettings } from './MasterSettings';
 
 export const MasterView: React.FC = () => {
   const tgUser = getTelegramUser();
-  const [activeTab, setActiveTab] = useState<'appointments' | 'schedule'>(() => {
+  const [activeTab, setActiveTab] = useState<'appointments' | 'schedule' | 'settings'>(() => {
     if (typeof window !== 'undefined') {
       const tabParam = new URLSearchParams(window.location.search).get('tab');
-      if (tabParam === 'schedule' || tabParam === 'appointments') {
+      if (tabParam === 'schedule' || tabParam === 'appointments' || tabParam === 'settings') {
         return tabParam;
       }
     }
@@ -35,14 +39,19 @@ export const MasterView: React.FC = () => {
   });
   const [studioConfig, setStudioConfig] = useState<StudioConfig | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [waitlistEntries, setWaitlistEntries] = useState<WaitlistEntry[]>([]);
   const [selectedDate, setSelectedDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
+    getLocalDateString()
   );
   const [modalPhoto, setModalPhoto] = useState<string | null>(null);
 
   const refreshAppointments = async () => {
-    const fetched = await api.getMasterDaySchedule(1, selectedDate);
+    const [fetched, wl] = await Promise.all([
+      api.getMasterDaySchedule(1, selectedDate),
+      api.getWaitlist(selectedDate),
+    ]);
     setAppointments(fetched);
+    setWaitlistEntries(wl);
   };
 
   useEffect(() => {
@@ -50,7 +59,7 @@ export const MasterView: React.FC = () => {
     api.getStudioConfig().then(setStudioConfig);
   }, [selectedDate]);
 
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'confirmed' | 'cancelled'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled'>('all');
 
   const filteredAppointments = appointments
     .filter((a) => a.date === selectedDate)
@@ -89,8 +98,8 @@ export const MasterView: React.FC = () => {
   return (
     <div className="max-w-md mx-auto px-4 py-4 space-y-4 pb-24">
       {/* Шапка мастера */}
-      <div className="bg-white p-4 rounded-2xl border border-stone-200/80 shadow-xs flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="bg-white p-4 rounded-2xl border border-stone-200/80 shadow-xs flex items-center justify-between gap-2">
+        <div className="flex items-center gap-3 min-w-0">
           <div className="w-11 h-11 rounded-full overflow-hidden bg-rose-100 text-rose-700 font-bold flex items-center justify-center text-sm border border-rose-200 shrink-0 shadow-xs">
             {studioConfig?.avatar_url ? (
               <img src={studioConfig.avatar_url} alt="Аватарка" className="w-full h-full object-cover" />
@@ -112,9 +121,22 @@ export const MasterView: React.FC = () => {
             </p>
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            triggerHaptic('light');
+            window.location.search = '?role=client';
+          }}
+          className="shrink-0 bg-stone-100 hover:bg-stone-200 text-stone-700 text-[11px] font-semibold px-2.5 py-1.5 rounded-xl flex items-center gap-1 transition-colors cursor-pointer"
+          title="Посмотреть глазами клиента"
+        >
+          <Eye className="w-3.5 h-3.5 text-rose-500" />
+          <span className="hidden xs:inline">Клиент</span>
+        </button>
       </div>
 
-      {/* Вкладки: Записи / График */}
+      {/* Вкладки: Записи / График / Настройки */}
       <div className="bg-stone-100/90 p-1 rounded-2xl flex border border-stone-200/60 shadow-2xs gap-1">
         <button
           id="master-tab-appointments"
@@ -149,10 +171,29 @@ export const MasterView: React.FC = () => {
           <CalendarDays className="w-3.5 h-3.5 text-rose-500" />
           <span>График</span>
         </button>
+
+        <button
+          id="master-tab-settings"
+          type="button"
+          onClick={() => {
+            triggerHaptic('light');
+            setActiveTab('settings');
+          }}
+          className={`flex-1 py-2 px-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+            activeTab === 'settings'
+              ? 'bg-white text-stone-900 shadow-xs'
+              : 'text-stone-500 hover:text-stone-800'
+          }`}
+        >
+          <Settings className="w-3.5 h-3.5 text-rose-500" />
+          <span>Настройки</span>
+        </button>
       </div>
 
       {/* Контент активной вкладки */}
-      {activeTab === 'schedule' ? (
+      {activeTab === 'settings' ? (
+        <MasterSettings onConfigUpdated={setStudioConfig} />
+      ) : activeTab === 'schedule' ? (
         <ScheduleSetup
           masterId={1}
           onScheduleUpdated={refreshAppointments}
@@ -204,6 +245,7 @@ export const MasterView: React.FC = () => {
                 { id: 'all', label: 'Все' },
                 { id: 'pending', label: 'Ожидают' },
                 { id: 'confirmed', label: 'Подтверждены' },
+                { id: 'completed', label: 'Завершены' },
                 { id: 'cancelled', label: 'Отменены' },
               ] as const
             ).map((tab) => {
@@ -258,6 +300,8 @@ export const MasterView: React.FC = () => {
                     ? 'На этот день записей пока нет'
                     : statusFilter === 'confirmed'
                     ? 'Подтвержденных записей на этот день не найдено'
+                    : statusFilter === 'completed'
+                    ? 'Завершенных записей на этот день не найдено'
                     : statusFilter === 'pending'
                     ? 'Ожидающих подтверждения записей не найдено'
                     : 'Отмененных записей не найдено'}
@@ -271,6 +315,7 @@ export const MasterView: React.FC = () => {
                 {filteredAppointments.map((app) => {
                   const isConfirmed = app.status === 'confirmed';
                   const isCancelled = app.status === 'cancelled';
+                  const isCompleted = app.status === 'completed';
 
                   return (
                     <div
@@ -279,6 +324,8 @@ export const MasterView: React.FC = () => {
                       className={`bg-white p-4 rounded-2xl border transition-all shadow-xs space-y-3 ${
                         isCancelled
                           ? 'border-stone-200 opacity-60 bg-stone-50'
+                          : isCompleted
+                          ? 'border-stone-200/90 bg-stone-50/40'
                           : isConfirmed
                           ? 'border-emerald-200/80 ring-1 ring-emerald-100'
                           : 'border-amber-200/80 ring-1 ring-amber-100'
@@ -299,6 +346,8 @@ export const MasterView: React.FC = () => {
                           className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                             isConfirmed
                               ? 'bg-emerald-100 text-emerald-800'
+                              : isCompleted
+                              ? 'bg-stone-200 text-stone-800'
                               : isCancelled
                               ? 'bg-rose-100 text-rose-800'
                               : 'bg-amber-100 text-amber-800'
@@ -306,6 +355,8 @@ export const MasterView: React.FC = () => {
                         >
                           {isConfirmed
                             ? 'Подтвержден'
+                            : isCompleted
+                            ? 'Завершен'
                             : isCancelled
                             ? 'Отменен'
                             : 'Ожидает'}
@@ -422,7 +473,7 @@ export const MasterView: React.FC = () => {
 
                       {/* Кнопки управления статусом */}
                       <div className="flex items-center gap-2 pt-1 border-t border-stone-100">
-                        {!isConfirmed && (
+                        {!isConfirmed && !isCompleted && (
                           <button
                             type="button"
                             onClick={() => handleStatusChange(app.id, 'confirmed')}
@@ -432,7 +483,17 @@ export const MasterView: React.FC = () => {
                             Подтвердить
                           </button>
                         )}
-                        {!isCancelled && (
+                        {isConfirmed && (
+                          <button
+                            type="button"
+                            onClick={() => handleStatusChange(app.id, 'completed')}
+                            className="flex-1 bg-stone-900 hover:bg-stone-800 text-white text-xs font-semibold py-2 px-3 rounded-xl transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                            Завершить визит
+                          </button>
+                        )}
+                        {!isCancelled && !isCompleted && (
                           <button
                             type="button"
                             onClick={() => handleStatusChange(app.id, 'cancelled')}
@@ -442,9 +503,9 @@ export const MasterView: React.FC = () => {
                             Отменить
                           </button>
                         )}
-                        {isConfirmed && (
-                          <span className="text-[11px] text-emerald-600 font-medium flex items-center gap-1">
-                            <CheckCircle className="w-3.5 h-3.5" /> Запись в графике
+                        {isCompleted && (
+                          <span className="text-[11px] text-stone-600 font-medium flex items-center gap-1">
+                            🏁 Визит завершён
                           </span>
                         )}
                       </div>
@@ -454,6 +515,51 @@ export const MasterView: React.FC = () => {
               </div>
             )}
           </section>
+
+          {/* Лист ожидания на выбранный день */}
+          {waitlistEntries.length > 0 && (
+            <section className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-3.5 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-950">
+                  <BellRing className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Лист ожидания на {selectedDate}</span>
+                </div>
+                <span className="text-[10px] font-bold bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-full">
+                  {waitlistEntries.length} чел.
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {waitlistEntries.map((wl) => (
+                  <div
+                    key={wl.id}
+                    className="bg-white/90 border border-amber-200/60 rounded-xl p-2.5 flex items-center justify-between text-xs"
+                  >
+                    <div>
+                      <span className="font-semibold text-stone-900">{wl.client_name}</span>
+                      {wl.client_username && (
+                        <a
+                          href={`https://t.me/${wl.client_username.replace(/^@/, '')}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="ml-2 text-rose-600 hover:underline font-medium"
+                        >
+                          @{wl.client_username.replace(/^@/, '')}
+                        </a>
+                      )}
+                      {wl.client_phone && (
+                        <span className="block text-[10px] text-stone-500 mt-0.5">
+                          {wl.client_phone}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                      {wl.is_notified ? 'Оповещён' : 'Ждёт окно'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </>
       )}
 

@@ -1,17 +1,24 @@
 """
-Модуль инициализации базы данных и создания тестовых данных для мастера маникюра.
+Модуль инициализации базы данных и создания стартовых данных для мастера маникюра.
 Поддерживает SQLite (для быстрой локальной разработки) и PostgreSQL (для продакшена).
 """
 
 import os
+import logging
 from datetime import date, time, timedelta
-from sqlalchemy import create_engine
+from dotenv import load_dotenv
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from backend.models import (
     Base, User, UserRole, Service, ServiceCategory,
     MasterSchedule, Appointment, AppointmentStatus, GlobalConfig,
     appointment_services_table
 )
+from backend.time_utils import get_local_naive_now
+
+load_dotenv()
+
+logger = logging.getLogger("database")
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./nail_bot.db")
 
@@ -33,7 +40,6 @@ def get_db():
 
 def ensure_db_schema_migrated(db_engine):
     """Автоматическая проверка и добавление недостающих столбцов в SQLite при обновлении моделей"""
-    from sqlalchemy import text
     with db_engine.connect() as conn:
         # 1. global_configs
         try:
@@ -83,7 +89,6 @@ def ensure_db_schema_migrated(db_engine):
         except Exception as e:
             logger.warning(f"Ошибка миграции appointments: {e}")
 
-
         # 3. users
         try:
             user_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(users)")).fetchall()]
@@ -102,15 +107,15 @@ def init_and_seed_db():
     db = SessionLocal()
 
     try:
-        # 1. Проверяем наличие тестового мастера
+        # 1. Проверяем наличие мастера
         master = db.query(User).filter(User.role == UserRole.MASTER).first()
         if not master:
             master = User(
-                tg_id=777000123,
+                tg_id=1324896381,
                 role=UserRole.MASTER,
                 first_name="Екатерина",
                 last_name="Нейл-Арт",
-                username="ekaterina_nails",
+                username="wrhal",
                 phone="+7 (999) 123-45-67",
                 strikes=0,
             )
@@ -120,7 +125,7 @@ def init_and_seed_db():
             # Конфигурация мастера
             config = GlobalConfig(
                 master_id=master.id,
-                default_sterilization_buffer=15,
+                default_sterilization_buffer=20,
                 auto_cancel_hours_before=8,
                 reminder_first_hours_before=24,
                 reminder_second_hours_before=12,
@@ -136,10 +141,11 @@ def init_and_seed_db():
             )
             db.add(config)
         else:
-            # Обновляем существующий конфиг, если в нем еще дефолтная Москва
+            # Обновляем существующий конфиг, если в нем остались устаревшие или тестовые данные
             cfg = db.query(GlobalConfig).first()
             if cfg:
-                cfg.default_sterilization_buffer = 20
+                if not cfg.default_sterilization_buffer or cfg.default_sterilization_buffer == 15:
+                    cfg.default_sterilization_buffer = 20
                 if not cfg.city:
                     cfg.city = "Екатеринбург"
                 if not cfg.timezone:
@@ -147,12 +153,21 @@ def init_and_seed_db():
                 if "Арбат" in (cfg.studio_address or ""):
                     cfg.studio_address = "г. Екатеринбург, ул. Викулова 78, кв. 300"
                     cfg.studio_cabinet = None
+                if cfg.studio_name == "Nail Studio EKB":
+                    cfg.studio_name = "Студия маникюра"
+                if cfg.studio_cabinet in ("204", "300"):
+                    cfg.studio_cabinet = None
                 db.commit()
 
         # 2. Каталог услуг (Конструктор: Снятие, База, Дизайн, Ремонт)
-        has_canonical = db.query(Service).filter(Service.name.like("%длина до 10%")).first() is not None
-        if db.query(Service).count() == 0 or not has_canonical:
-            # Очищаем устаревшие мок-услуги
+        # Заменяем только если база пуста ИЛИ содержит старые мок-услуги из первой демо-версии
+        has_legacy_mock = (
+            db.query(Service)
+            .filter(Service.name == "Снятие гель-лака другого мастера")
+            .first()
+            is not None
+        )
+        if db.query(Service).count() == 0 or has_legacy_mock:
             db.execute(appointment_services_table.delete())
             db.query(Service).delete()
             db.commit()
@@ -201,7 +216,7 @@ def init_and_seed_db():
                     id=10,
                     category=ServiceCategory.BASE,
                     name="-",
-                    description="Без основного покрытия",
+                    description="Без основного покрытия (если выбрано снятие с маникюром)",
                     duration_minutes=0,
                     price=0.0,
                     sort_order=10,
@@ -227,7 +242,7 @@ def init_and_seed_db():
                 Service(
                     id=13,
                     category=ServiceCategory.BASE,
-                    name="маникюр с наращивание ногтей длина до 7",
+                    name="маникюр с наращиванием ногтей длина до 7",
                     description="Маникюр с наращиванием ногтей длина до 7",
                     duration_minutes=160,
                     price=2800.0,
@@ -313,7 +328,7 @@ def init_and_seed_db():
             db.add_all(services_data)
             db.commit()
         else:
-            # Корректировка порядка сортировки, если услуга базы улетела в начало
+            # Корректировка порядка сортировки базовых услуг
             base_services = (
                 db.query(Service)
                 .filter(Service.category == ServiceCategory.BASE)
@@ -323,21 +338,22 @@ def init_and_seed_db():
                 if srv.name.strip() == "-":
                     srv.sort_order = 10
                 elif srv.price == 3400.0 or "длина до 10" in srv.name:
-                    # Наращивание за 3400 всегда в конце базовых услуг
                     srv.sort_order = 19
                 elif srv.sort_order < 10:
-                    # Если sort_order был выставлен по ошибке меньше 10
                     srv.sort_order = 15
             db.commit()
 
-        # 3. Создаем расписание мастера на ближайшие 14 дней
-        today = date.today()
+        # 3. Создаем расписание мастера на ближайшие 30 дней по часовому поясу студии
+        cfg = db.query(GlobalConfig).first()
+        tz_name = cfg.timezone if cfg and cfg.timezone else "Asia/Yekaterinburg"
+        today = get_local_naive_now(tz_name).date()
+
         # Обновляем буфер до 20 минут в существующих расписаниях
         db.query(MasterSchedule).filter(MasterSchedule.sterilization_buffer_minutes == 15).update(
             {"sterilization_buffer_minutes": 20}
         )
 
-        for offset in range(14):
+        for offset in range(30):
             day = today + timedelta(days=offset)
             existing_schedule = db.query(MasterSchedule).filter(
                 MasterSchedule.master_id == master.id,
@@ -345,7 +361,7 @@ def init_and_seed_db():
             ).first()
 
             if not existing_schedule:
-                # Воскресенье сделаем выходным для реалистичности
+                # Воскресенье сделаем выходным по умолчанию
                 is_off = day.weekday() == 6
                 new_sched = MasterSchedule(
                     master_id=master.id,

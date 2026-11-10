@@ -18,6 +18,7 @@ import {
   getTelegramWebApp,
   triggerHaptic,
   MASTER_TG_IDS,
+  getLocalDateString,
 } from '../utils/telegram';
 
 export const ClientApp: React.FC = () => {
@@ -25,9 +26,26 @@ export const ClientApp: React.FC = () => {
   const [services, setServices] = useState<CategorizedServices>(INITIAL_SERVICES);
   const [createdAppointment, setCreatedAppointment] = useState<Appointment | null>(null);
   const [isAppointmentsOpen, setIsAppointmentsOpen] = useState<boolean>(false);
+  const [activeAppointmentsCount, setActiveAppointmentsCount] = useState<number>(0);
 
   const tgUser = getTelegramUser();
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalDateString();
+
+  const savedClientName = (() => {
+    try {
+      return localStorage.getItem('nail_client_name') || '';
+    } catch {
+      return '';
+    }
+  })();
+
+  const savedClientPhone = (() => {
+    try {
+      return localStorage.getItem('nail_client_phone') || '';
+    } catch {
+      return '';
+    }
+  })();
 
   const [booking, setBooking] = useState<BookingState>({
     selectedRemovalId: null,
@@ -39,18 +57,27 @@ export const ClientApp: React.FC = () => {
     photoCurrent: null,
     photoRef: null,
     comment: '',
-    clientName: tgUser.firstName || 'Алина',
-    clientPhone: '+7 (999) 123-45-67',
+    clientName: savedClientName || tgUser.firstName || 'Алина',
+    clientPhone: savedClientPhone || '',
     clientUsername: tgUser.username || '',
     tgId: tgUser.id,
   });
 
-  // Загрузка услуг
+  // Загрузка услуг и количества активных записей
   useEffect(() => {
     api.getServices().then((data) => {
       if (data) setServices(data);
     });
-  }, []);
+    api.getClientAppointments(tgUser.id).then((list) => {
+      if (Array.isArray(list)) {
+        const count = list.filter((a) => {
+          const st = String(a.status || '').toUpperCase();
+          return (st === 'PENDING' || st === 'CONFIRMED') && a.date >= todayStr;
+        }).length;
+        setActiveAppointmentsCount(count);
+      }
+    }).catch(() => {});
+  }, [tgUser.id, todayStr]);
 
   // Синхронизация нативной кнопки Telegram BackButton
   useEffect(() => {
@@ -158,9 +185,10 @@ export const ClientApp: React.FC = () => {
 
   // Подтверждение и создание бронирования
   const handleConfirmBooking = async () => {
-    triggerHaptic('success');
     const appointment = await api.createAppointment(booking);
+    triggerHaptic('success');
     setCreatedAppointment(appointment);
+    setActiveAppointmentsCount((prev) => prev + 1);
     setCurrentStep(5);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -169,17 +197,17 @@ export const ClientApp: React.FC = () => {
   const handleResetBooking = () => {
     triggerHaptic('medium');
     setBooking({
-      selectedRemovalId: 1,
-      selectedBaseId: 10,
-      selectedDesignId: 20,
+      selectedRemovalId: null,
+      selectedBaseId: null,
+      selectedDesignId: null,
       selectedRepairIds: [],
       targetDate: todayStr,
       selectedSlot: null,
       photoCurrent: null,
       photoRef: null,
       comment: '',
-      clientName: tgUser.firstName || 'Алина',
-      clientPhone: '+7 (999) 123-45-67',
+      clientName: booking.clientName || tgUser.firstName || 'Алина',
+      clientPhone: booking.clientPhone || '',
       clientUsername: tgUser.username || '',
       tgId: tgUser.id,
     });
@@ -217,6 +245,7 @@ export const ClientApp: React.FC = () => {
           setCurrentStep(step);
         }}
         onOpenAppointments={() => setIsAppointmentsOpen(true)}
+        activeAppointmentsCount={activeAppointmentsCount}
       />
 
       {/* Основной контейнер формы */}
@@ -316,6 +345,7 @@ export const ClientApp: React.FC = () => {
         isOpen={isAppointmentsOpen}
         onClose={() => setIsAppointmentsOpen(false)}
         tgId={tgUser.id}
+        onCountChange={setActiveAppointmentsCount}
         onBookNew={() => {
           setCurrentStep(1);
           setIsAppointmentsOpen(false);

@@ -30,12 +30,17 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
   onProceedToSlots,
   onProceed,
 }) => {
+  const activeRemoval = services.removal.filter((s) => s.is_active !== false);
+  const activeBase = services.base.filter((s) => s.is_active !== false);
+  const activeDesign = services.design.filter((s) => s.is_active !== false);
+  const activeRepair = services.repair.filter((s) => s.is_active !== false);
+
   // Находим выбранные объекты услуг для подсчета
   const allServices: Service[] = [
-    ...services.removal,
-    ...services.base,
-    ...services.design,
-    ...services.repair,
+    ...activeRemoval,
+    ...activeBase,
+    ...activeDesign,
+    ...activeRepair,
   ];
 
   const currentSelectedIds = [
@@ -59,7 +64,8 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
     return `${m} мин`;
   };
 
-  const isFormValid = selectedRemovalId !== null && selectedBaseId !== null && selectedDesignId !== null;
+  const hasAllRequiredCategories = selectedRemovalId !== null && selectedBaseId !== null && selectedDesignId !== null;
+  const isFormValid = hasAllRequiredCategories && procedureMinutes > 0;
 
   return (
     <div className="pb-32 max-w-md mx-auto px-4 pt-3 space-y-6">
@@ -95,7 +101,7 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
         </div>
 
         <div className="grid grid-cols-1 gap-2">
-          {services.removal.map((service) => {
+          {activeRemoval.map((service) => {
             const isSelected = selectedRemovalId === service.id;
             return (
               <div
@@ -163,7 +169,7 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
         </div>
 
         <div className="grid grid-cols-1 gap-2">
-          {services.base.map((service) => {
+          {activeBase.map((service) => {
             const isSelected = selectedBaseId === service.id;
             return (
               <div
@@ -229,7 +235,7 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
         </div>
 
         <div className="grid grid-cols-1 gap-2">
-          {services.design.map((service) => {
+          {activeDesign.map((service) => {
             const isSelected = selectedDesignId === service.id;
             return (
               <div
@@ -295,7 +301,7 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
         </div>
 
         <div className="grid grid-cols-1 gap-2">
-          {services.repair.map((service) => {
+          {activeRepair.map((service) => {
             const isSelected = selectedRepairIds.includes(service.id);
             return (
               <div
@@ -358,9 +364,14 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
                 • {formatDuration(procedureMinutes)}
               </span>
             </div>
-            {!isFormValid && (
+            {!hasAllRequiredCategories && (
               <div className="text-[10px] text-rose-500 font-medium">
                 Выберите обязательные этапы 1, 2 и 3
+              </div>
+            )}
+            {hasAllRequiredCategories && procedureMinutes === 0 && (
+              <div className="text-[10px] text-amber-600 font-medium">
+                Выберите хотя бы одну процедуру (маникюр или снятие)
               </div>
             )}
           </div>

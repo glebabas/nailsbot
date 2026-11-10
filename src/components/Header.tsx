@@ -8,12 +8,14 @@ interface HeaderProps {
   currentStep: number;
   onStepClick: (step: number) => void;
   onOpenAppointments?: () => void;
+  activeAppointmentsCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   currentStep,
   onStepClick,
   onOpenAppointments,
+  activeAppointmentsCount = 0,
 }) => {
   const tgUser = getTelegramUser();
   const [studioConfig, setStudioConfig] = useState<StudioConfig | null>(null);
@@ -69,11 +71,16 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={onOpenAppointments}
               type="button"
-              className="flex items-center gap-1 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1 rounded-full text-xs font-semibold text-rose-700 transition-all shadow-xs cursor-pointer"
+              className="relative flex items-center gap-1 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1 rounded-full text-xs font-semibold text-rose-700 transition-all shadow-xs cursor-pointer"
               title="Посмотреть мои записи"
             >
               <span>📅</span>
               <span className="hidden xs:inline">Записи</span>
+              {activeAppointmentsCount > 0 && (
+                <span className="ml-0.5 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none">
+                  {activeAppointmentsCount}
+                </span>
+              )}
             </button>
           )}
 

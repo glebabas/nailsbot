@@ -3,20 +3,37 @@
 Запуск сервера: uvicorn backend.main:app --reload --port 8000
 """
 
+import os
+import sys
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+load_dotenv()
+
+# Безопасная настройка UTF-8 вывода для консоли Windows (предотвращает UnicodeEncodeError в cp1251)
+try:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 from backend.database import init_and_seed_db
 from backend.api import router as api_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # При старте приложения создаем таблицы и наполняем демо-услугами на русском языке
+    # При старте приложения создаем таблицы и наполняем базовыми услугами на русском языке
     init_and_seed_db()
-    print("✓ База данных инициализирована. Таблицы и услуги мастера загружены.")
+    print("[OK] База данных инициализирована. Таблицы и услуги мастера загружены.")
     yield
-    print("Приложение остановлено.")
+    print("[INFO] Приложение остановлено.")
 
 
 app = FastAPI(
@@ -46,19 +63,23 @@ def health_check():
 
 
 # Раздача статики собранного фронтенда (dist)
-import os
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-
-dist_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dist")
+dist_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), "dist"))
 if os.path.exists(dist_dir):
     assets_dir = os.path.join(dist_dir, "assets")
     if os.path.exists(assets_dir):
         app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
-    @app.get("/{full_path:path}")
+    @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str):
-        file_path = os.path.join(dist_dir, full_path)
-        if os.path.exists(file_path) and os.path.isfile(file_path):
+        # Не перехватываем несуществующие API-маршруты
+        if full_path.startswith("api/") or full_path == "api":
+            raise HTTPException(status_code=404, detail="API endpoint not found")
+
+        file_path = os.path.abspath(os.path.join(dist_dir, full_path))
+        if file_path.startswith(dist_dir) and os.path.exists(file_path) and os.path.isfile(file_path):
             return FileResponse(file_path)
-        return FileResponse(os.path.join(dist_dir, "index.html"))
+
+        index_path = os.path.join(dist_dir, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        raise HTTPException(status_code=404, detail="Frontend build not found")
