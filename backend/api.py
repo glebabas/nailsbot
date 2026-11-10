@@ -1009,8 +1009,8 @@ def update_studio_config(payload: StudioConfigUpdateRequest, db: Session = Depen
         config.studio_name = payload.studio_name
     if payload.studio_address is not None:
         config.studio_address = payload.studio_address
-    if payload.studio_cabinet is not None:
-        val = payload.studio_cabinet.strip()
+    if "studio_cabinet" in payload.model_fields_set:
+        val = (payload.studio_cabinet or "").strip()
         config.studio_cabinet = val if val else None
     if payload.city is not None:
         config.city = payload.city
